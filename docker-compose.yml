@@ -1,0 +1,29 @@
+version: '3.9'
+
+services:
+  backend:
+    container_name: kuwin-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      - database
+
+  database:
+    image: mysql:latest
+    container_name: kuwin-database
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mysql_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./src/sql/backup.sql:/docker-entrypoint-initdb.d/backup.sql
+
+
