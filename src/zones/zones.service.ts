@@ -1,6 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { CreateZoneDto } from './dto/create-zone.dto';
-import { UpdateZoneDto } from './dto/update-zone.dto';
 import { NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,9 +10,9 @@ export class ZonesService {
     @InjectRepository(Zone) private zoneRepository: Repository<Zone>,
   ) {}
 
-  create(createZoneDto: CreateZoneDto) {
-    return 'This action adds a new zone';
-  }
+  // create(createZoneDto: CreateZoneDto) {
+  //   return 'This action adds a new zone';
+  // }
 
   async findAll(): Promise<Zone[]> {
     console.log(`This action returns all zones`);
@@ -31,9 +29,9 @@ export class ZonesService {
     return zone;
   }
 
-  update(id: number, updateZoneDto: UpdateZoneDto) {
-    return `This action updates a #${id} zone`;
-  }
+  // update(id: number, updateZoneDto: UpdateZoneDto) {
+  //   return `This action updates a #${id} zone`;
+  // }
 
   remove(id: number) {
     return `This action removes a #${id} zone`;

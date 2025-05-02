@@ -2,5 +2,11 @@
 
 echo "Starting backup process..."
 
-docker exec testmysql \
-  mysqldump -uroot -proot --all-databases > ./src/sql/backup.sql
+FILENAME="backup"
+
+if [ ! -z "$1" ]; then
+	FILENAME=$1
+fi
+
+docker exec kuwin-database \
+  mysqldump -uroot -proot --all-databases > ./src/sql/$FILENAME.sql
