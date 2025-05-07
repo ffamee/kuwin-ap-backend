@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
 import { AuthResponse } from '../shared/types/auth-response.dto';
@@ -25,8 +25,32 @@ export class AuthService {
 
   login(user: AuthResponse) {
     const payload = { username: user.username, id: user.id };
+    console.log('login with', payload.username);
     return {
-      accessToken: this.jwtService.sign(payload),
+      accessToken: this.jwtService.sign(payload, {
+        secret: process.env.JWT_SECRET!,
+        expiresIn: '15m',
+      }),
+      refreshToken: this.jwtService.sign(payload, {
+        secret: process.env.JWT_REFRESH_SECRET!,
+        expiresIn: '7d',
+      }),
     };
+  }
+
+  async verifyRefreshToken(
+    refreshToken: string,
+    payload: AuthResponse,
+  ): Promise<AuthResponse> {
+    try {
+      const user = await this.usersService.findUserLogin(payload.username);
+      // you can validate the refresh token here if needed (use compare)
+      if (!user) {
+        throw new UnauthorizedException();
+      }
+      return user;
+    } catch (err) {
+      throw new UnauthorizedException(`Refresh token invalid ${err}`);
+    }
   }
 }
