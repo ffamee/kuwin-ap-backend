@@ -23,3 +23,18 @@ services:
       - "3306:3306"
     volumes:
       - ./src/sql/backup.sql:/docker-entrypoint-initdb.d/backup.sql
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: kuwin-phpmyadmin
+    depends_on:
+      - database
+    environment:
+      PMA_HOST: database
+      PMA_PORT: 3306
+      # (option) กำหนด user และ password ค่า default จะดึงจาก database env
+      # PMA_USER: user
+      # PMA_PASSWORD: password
+    ports:
+      - "8080:80"
+    restart: always

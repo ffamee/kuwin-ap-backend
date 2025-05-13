@@ -46,6 +46,7 @@ export class AuthService {
       const user = await this.usersService.findUserLogin(payload.username);
       // you can validate the refresh token here if needed (use compare)
       if (!user) {
+        // delete the refresh token from the database if you store it, force logout
         throw new UnauthorizedException();
       }
       return user;
