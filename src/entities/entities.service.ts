@@ -13,7 +13,28 @@ export class EntitiesService {
   //   return 'This action adds a new entity';
   // }
 
-  findAll() {
-    return `This action returns all entities`;
+  async findOne(section: string): Promise<Entity[]> {
+    const entities = await this.entityRepository.find({
+      where: { section: { secType: section } },
+    });
+    return entities;
+  }
+
+  findAll(): Promise<Entity[][]> {
+    // return all entities grouped by section.secType
+    return Promise.all([
+      this.entityRepository.find({
+        where: { section: { secType: 'faculty' } },
+        relations: ['section'],
+      }),
+      this.entityRepository.find({
+        where: { section: { secType: 'organization' } },
+        relations: ['section'],
+      }),
+      this.entityRepository.find({
+        where: { section: { secType: 'dormitory' } },
+        relations: ['section'],
+      }),
+    ]);
   }
 }

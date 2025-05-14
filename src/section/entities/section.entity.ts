@@ -13,7 +13,7 @@ export class Section {
 
   @Column('varchar', {
     name: 'sec_type',
-    length: 10,
+    length: 30,
     nullable: false,
     unique: true,
   })

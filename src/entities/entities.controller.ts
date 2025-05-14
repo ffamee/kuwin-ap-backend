@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { EntitiesService } from './entities.service';
 
 @Controller('entities')
@@ -9,6 +9,11 @@ export class EntitiesController {
   // create(@Body() createEntityDto: CreateEntityDto) {
   //   return this.entitiesService.create(createEntityDto);
   // }
+
+  @Get(':section')
+  findOne(@Param('section') section: string) {
+    return this.entitiesService.findOne(section);
+  }
 
   @Get()
   findAll() {
