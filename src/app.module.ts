@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { SectionModule } from './section/section.module';
 import { EntitiesModule } from './entities/entities.module';
+import { BuildingsModule } from './buildings/buildings.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { EntitiesModule } from './entities/entities.module';
     AuthModule,
     SectionModule,
     EntitiesModule,
+    BuildingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

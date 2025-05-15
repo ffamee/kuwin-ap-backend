@@ -1,11 +1,13 @@
 import {
   Column,
   Entity as EntityDecorator,
-  JoinColumn,
+  // JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Section } from '../../section/entities/section.entity';
+import { Building } from '../../buildings/entities/building.entity';
 
 @EntityDecorator('entity')
 export class Entity {
@@ -58,13 +60,16 @@ export class Entity {
   })
   pic: string;
 
-  @Column('int', { name: 'sec_type_id' })
-  secId: number;
+  // @Column('int', { name: 'sec_type_id' })
+  // secId: number;
 
   @ManyToOne(() => Section, (section) => section.entities, {
     onDelete: 'RESTRICT',
     onUpdate: 'CASCADE',
   })
-  @JoinColumn({ name: 'sec_type_id' })
+  // @JoinColumn({ name: 'sec_type_id' })
   section: Section;
+
+  @OneToMany(() => Building, (building) => building.entity)
+  buildings: Building[];
 }

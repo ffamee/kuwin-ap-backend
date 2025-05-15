@@ -18,4 +18,8 @@ export class SectionService {
   create(createSectionDto: CreateSectionDto): Promise<Section> {
     return this.sectionRepository.save(createSectionDto);
   }
+
+  exist(section: string): Promise<boolean> {
+    return this.sectionRepository.exists({ where: { secType: section } });
+  }
 }
