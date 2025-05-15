@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { ZonesService } from './zones.service';
 
 @Controller('zones')
@@ -25,8 +25,8 @@ export class ZonesController {
   //   return this.zonesService.update(+id, updateZoneDto);
   // }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.zonesService.remove(+id);
-  }
+  // @Delete(':id')
+  // remove(@Param('id') id: string) {
+  //   return this.zonesService.remove(+id);
+  // }
 }

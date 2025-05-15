@@ -33,7 +33,7 @@ export class ZonesService {
   //   return `This action updates a #${id} zone`;
   // }
 
-  remove(id: number) {
-    return `This action removes a #${id} zone`;
-  }
+  // remove(id: number) {
+  //   return `This action removes a #${id} zone`;
+  // }
 }

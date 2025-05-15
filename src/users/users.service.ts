@@ -60,9 +60,9 @@ export class UsersService {
   //   }
   // }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
-  }
+  // remove(id: number) {
+  //   return `This action removes a #${id} user`;
+  // }
 
   async check(username: string, password: string) {
     return this.userRepository
