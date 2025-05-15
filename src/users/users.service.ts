@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
@@ -24,7 +28,7 @@ export class UsersService {
     console.log(`This action returns a ${username} user`);
     const user = await this.userRepository.findOne({ where: { username } });
     if (!user) {
-      throw new BadRequestException('User not found');
+      throw new NotFoundException('User not found');
     }
     // const passwordText = Buffer.from(user.password, 'base64').toString('utf-8');
     // solution 1
@@ -69,12 +73,12 @@ export class UsersService {
       .findOne({ where: { username } })
       .then(async (user) => {
         if (!user) {
-          throw new BadRequestException('User not found');
+          throw new NotFoundException('User not found');
         }
         return await bcrypt.compare(password, user.password);
       })
       .catch(() => {
-        throw new BadRequestException(`Can't validate user`);
+        throw new InternalServerErrorException(`Login Error`);
       });
   }
 
@@ -83,7 +87,7 @@ export class UsersService {
       where: { id: user.id },
     });
     if (!userProfile) {
-      throw new BadRequestException('User not found from token');
+      throw new NotFoundException('User not found from token');
     }
     return userProfile;
   }

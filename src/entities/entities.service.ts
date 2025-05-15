@@ -31,21 +31,23 @@ export class EntitiesService {
     return entities;
   }
 
-  findAll(): Promise<Entity[][]> {
+  async findAll(): Promise<{
+    faculty: Entity[];
+    organization: Entity[];
+    dormitory: Entity[];
+  }> {
     // return all entities grouped by section.secType
-    return Promise.all([
+    const [faculty, organization, dormitory] = await Promise.all([
       this.entityRepository.find({
         where: { section: { secType: 'faculty' } },
-        relations: ['section'],
       }),
       this.entityRepository.find({
         where: { section: { secType: 'organization' } },
-        relations: ['section'],
       }),
       this.entityRepository.find({
         where: { section: { secType: 'dormitory' } },
-        relations: ['section'],
       }),
     ]);
+    return { faculty, organization, dormitory };
   }
 }

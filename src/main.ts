@@ -16,6 +16,8 @@ async function bootstrap() {
     .setDescription('AP monitor API description')
     .setVersion('1.0')
     .addTag('AP-monitor')
+    .addCookieAuth('accessToken', { type: 'apiKey' })
+    .addCookieAuth('refreshToken', { type: 'apiKey' })
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, documentFactory);
