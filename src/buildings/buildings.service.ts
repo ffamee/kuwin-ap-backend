@@ -25,4 +25,10 @@ export class BuildingsService {
       where: { entity: { id } },
     });
   }
+
+  exist(id: number): Promise<boolean> {
+    return this.buildingRepository.exists({
+      where: { id },
+    });
+  }
 }

@@ -3,8 +3,10 @@ import {
   Entity as TypeOrmEntity,
   ManyToOne,
   PrimaryGeneratedColumn,
+  OneToMany,
 } from 'typeorm';
 import { Entity } from '../../entities/entities/entity.entity';
+import { Accesspoint } from '../../accesspoints/entities/accesspoint.entity';
 
 @TypeOrmEntity('building')
 export class Building {
@@ -45,4 +47,7 @@ export class Building {
     onUpdate: 'CASCADE',
   })
   entity: Entity;
+
+  @OneToMany(() => Accesspoint, (accesspoint) => accesspoint.building)
+  accesspoints: Accesspoint[];
 }

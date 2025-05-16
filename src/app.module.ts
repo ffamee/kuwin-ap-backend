@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { SectionModule } from './section/section.module';
 import { EntitiesModule } from './entities/entities.module';
 import { BuildingsModule } from './buildings/buildings.module';
+import { AccesspointsModule } from './accesspoints/accesspoints.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { BuildingsModule } from './buildings/buildings.module';
     SectionModule,
     EntitiesModule,
     BuildingsModule,
+    AccesspointsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
