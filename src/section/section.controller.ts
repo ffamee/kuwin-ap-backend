@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { SectionService } from './section.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -9,7 +9,65 @@ export class SectionController {
   constructor(private readonly sectionService: SectionService) {}
 
   @ApiOperation({
-    summary: '*unused* Get all sections with entities inside themselves',
+    summary: 'Get everything in sections',
+  })
+  @ApiOkResponse({
+    description: "return everything's name",
+  })
+  @Get('all')
+  findAllData() {
+    return this.sectionService.findAllData();
+  }
+
+  @ApiOperation({
+    summary: 'Get all entities in sections with their names',
+  })
+  @ApiOkResponse({
+    description: 'return object with key as section id',
+    schema: {
+      type: 'object',
+      properties: {
+        id: {
+          properties: {
+            id: { type: 'number', example: 1 },
+            name: { type: 'string', example: 'Section 1' },
+            entities: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number' },
+                  name: { type: 'string' },
+                },
+                example: [
+                  {
+                    id: 1,
+                    name: 'Entity 1',
+                  },
+                  {
+                    id: 2,
+                    name: 'Entity 2',
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Get('name')
+  findAllName() {
+    return this.sectionService.findAllName();
+  }
+
+  @Get('overview/:section')
+  getOverview(@Param('section') section: string) {
+    return this.sectionService.getOverview(section);
+  }
+
+  @ApiOperation({
+    summary: 'Get all sections without *others',
   })
   @ApiOkResponse({
     description: 'return list of all sections',
@@ -18,30 +76,20 @@ export class SectionController {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'number', example: 1 },
-          secType: { type: 'string', example: 'Section 1' },
-          entities: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'number' },
-                name: { type: 'string' },
-              },
-              example: [
-                {
-                  id: 1,
-                  name: 'Entity 1',
-                },
-                {
-                  id: 2,
-                  name: 'Entity 2',
-                },
-              ],
-            },
-          },
+          id: { type: 'number' },
+          secType: { type: 'string' },
         },
       },
+      example: [
+        {
+          id: 1,
+          secType: 'Section 1',
+        },
+        {
+          id: 2,
+          secType: 'Section 2',
+        },
+      ],
     },
   })
   @Get()

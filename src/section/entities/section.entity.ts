@@ -17,7 +17,7 @@ export class Section {
     nullable: false,
     unique: true,
   })
-  secType: string;
+  name: string;
 
   @OneToMany(() => Entity, (entity) => entity.section)
   entities: Entity[];

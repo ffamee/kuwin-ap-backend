@@ -18,6 +18,37 @@ export class EntitiesController {
   // create(@Body() createEntityDto: CreateEntityDto) {
   //   return this.entitiesService.create(createEntityDto);
   // }
+  @ApiOperation({
+    summary: 'Get all buildings in entities with their names',
+  })
+  @ApiOkResponse({
+    description: 'return object with key as entity id',
+    schema: {
+      type: 'object',
+      properties: {
+        id: {
+          properties: {
+            id: { type: 'number', example: 1 },
+            name: { type: 'string', example: 'Section 1' },
+            buildings: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number', example: 1 },
+                  name: { type: 'string', example: 'Building 1' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Get('name')
+  findAllName() {
+    return this.entitiesService.findAllName();
+  }
 
   @ApiOperation({
     summary: 'Get all entities in section #{section}',
@@ -55,7 +86,7 @@ export class EntitiesController {
     summary: 'Get all entities for each section',
   })
   @ApiOkResponse({
-    description: 'return list of all entities for each section',
+    description: 'return object with key as section name of all entities',
     schema: {
       type: 'object',
       properties: {

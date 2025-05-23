@@ -42,8 +42,8 @@ export class Accesspoint {
   @Index('Location')
   location: string | null;
 
-  @Column('int', { name: 'Number_client', nullable: true })
-  numberClient: number | null;
+  @Column('int', { name: 'Number_client', nullable: false, default: 0 })
+  numberClient: number;
 
   @Column('bigint', { name: 'RXBS', nullable: true, unsigned: true })
   rxbs: string | null;
@@ -195,8 +195,8 @@ export class Accesspoint {
   @Column('int', { name: 'channel_2' })
   channel_2: number;
 
-  @Column('int', { name: 'Number_client_2', nullable: true })
-  numberClient_2: number | null;
+  @Column('int', { name: 'Number_client_2', nullable: false, default: 0 })
+  numberClient_2: number;
 
   @Column('int', { name: 'cl_max_2' })
   clMax_2: number;

@@ -62,6 +62,7 @@ export class BuildingsController {
   @ApiOperation({ summary: 'Get all buildings' })
   @ApiOkResponse({
     description: 'All buildings',
+    type: [Building],
   })
   findAll() {
     return this.buildingsService.findAll();

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Entity } from './entities/entity.entity';
 import { Repository } from 'typeorm';
@@ -9,6 +14,8 @@ export class EntitiesService {
   constructor(
     @InjectRepository(Entity)
     private entityRepository: Repository<Entity>,
+    @Inject(forwardRef(() => SectionService))
+    // @Inject(forwardRef(() => AccesspointsService))
     private readonly sectionService: SectionService,
   ) {}
   // create(createEntityDto: CreateEntityDto) {
@@ -26,7 +33,7 @@ export class EntitiesService {
       throw new NotFoundException(`Section with id ${section} not found`);
     }
     const entities = await this.entityRepository.find({
-      where: { section: { secType: section } },
+      where: { section: { name: section } },
     });
     return entities;
   }
@@ -37,17 +44,70 @@ export class EntitiesService {
     dormitory: Entity[];
   }> {
     // return all entities grouped by section.secType
-    const [faculty, organization, dormitory] = await Promise.all([
-      this.entityRepository.find({
-        where: { section: { secType: 'faculty' } },
-      }),
-      this.entityRepository.find({
-        where: { section: { secType: 'organization' } },
-      }),
-      this.entityRepository.find({
-        where: { section: { secType: 'dormitory' } },
-      }),
-    ]);
+    const [faculty, organization, dormitory]: [Entity[], Entity[], Entity[]] =
+      await Promise.all([
+        this.entityRepository.find({
+          where: { section: { name: 'faculty' } },
+          relations: { buildings: true },
+        }),
+        this.entityRepository.find({
+          where: { section: { name: 'organization' } },
+          relations: { buildings: true },
+        }),
+        this.entityRepository.find({
+          where: { section: { name: 'dormitory' } },
+          relations: { buildings: true },
+        }),
+      ]);
     return { faculty, organization, dormitory };
+  }
+
+  async findAllName(): Promise<Record<string, Entity>> {
+    const res = await this.entityRepository.find({
+      select: {
+        id: true,
+        name: true,
+        buildings: {
+          id: true,
+          name: true,
+        },
+      },
+      relations: { buildings: true },
+    });
+
+    const entities: Record<string, Entity> = res.reduce(
+      (acc, entity) => {
+        acc[entity.id.toString()] = entity;
+        return acc;
+      },
+      {} as Record<string, Entity>,
+    );
+
+    return entities;
+  }
+
+  async findEntitiesWithApCount(section: string) {
+    return this.entityRepository
+      .createQueryBuilder('entity')
+      .leftJoin('entity.section', 'section')
+      .leftJoin('entity.buildings', 'building')
+      .leftJoin('building.accesspoints', 'accesspoint')
+      .where('section.name = :section', { section })
+      .select('entity.id', 'id')
+      .addSelect('entity.name', 'name')
+      .addSelect('COUNT(accesspoint.id)', 'apALL')
+      .addSelect(
+        `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
+        'apMaintain',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN accesspoint.Status = 'down' THEN 1 END)`,
+        'apDown',
+      )
+      .addSelect('SUM(accesspoint.numberClient)', 'user1')
+      .addSelect('SUM(accesspoint.numberClient_2)', 'user2')
+      .groupBy('entity.id')
+      .addGroupBy('entity.name')
+      .getRawMany();
   }
 }
