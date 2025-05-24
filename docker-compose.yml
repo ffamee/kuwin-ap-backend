@@ -12,7 +12,7 @@ services:
       - database
 
   database:
-    image: mysql:latest
+    image: mysql:8.0.42
     container_name: kuwin-database
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -25,7 +25,7 @@ services:
       - ./src/sql/backup.sql:/docker-entrypoint-initdb.d/backup.sql
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin:latest
+    image: phpmyadmin/phpmyadmin:5.2.0
     container_name: kuwin-phpmyadmin
     depends_on:
       - database

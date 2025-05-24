@@ -62,8 +62,8 @@ export class SectionController {
   }
 
   @Get('overview/:section')
-  getOverview(@Param('section') section: string) {
-    return this.sectionService.getOverview(section);
+  getOverview(@Param('section') sec: string) {
+    return this.sectionService.getOverview(sec);
   }
 
   @ApiOperation({

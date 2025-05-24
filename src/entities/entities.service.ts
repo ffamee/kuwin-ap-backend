@@ -95,7 +95,7 @@ export class EntitiesService {
       .where('section.name = :section', { section })
       .select('entity.id', 'id')
       .addSelect('entity.name', 'name')
-      .addSelect('COUNT(accesspoint.id)', 'apALL')
+      .addSelect('COUNT(accesspoint.id)', 'apAll')
       .addSelect(
         `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
         'apMaintain',

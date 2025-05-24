@@ -82,20 +82,25 @@ export class SectionService {
     });
   }
 
-  async getOverview(section: string) {
-    if (!(await this.exist(section))) {
-      throw new NotFoundException(`Section ${section} not found`);
+  async getOverview(sec: string) {
+    const section = await this.sectionRepository.findOne({
+      where: { name: sec },
+    });
+    if (!section) {
+      throw new NotFoundException(`Section ${sec} not found`);
     }
-    const [ap, apMaintain, apDown, totalUser, entities] = await Promise.all([
-      this.accesspointsService.countAPInSection(section),
-      this.accesspointsService.countAPMaintainInSection(section),
-      this.accesspointsService.countAPDownInSection(section),
-      this.accesspointsService.sumAllClientInSection(section),
-      this.entitiesService.findEntitiesWithApCount(section),
+    const [apAll, apMaintain, apDown, totalUser, entities] = await Promise.all([
+      this.accesspointsService.countAPInSection(sec),
+      this.accesspointsService.countAPMaintainInSection(sec),
+      this.accesspointsService.countAPDownInSection(sec),
+      this.accesspointsService.sumAllClientInSection(sec),
+      this.entitiesService.findEntitiesWithApCount(sec),
     ]);
     // table => name, ap in entity, ap maintain in entity, ap down in entity, total user in entity, wlc in entity
     return {
-      ap,
+      id: section.id,
+      name: section.name,
+      apAll,
       apMaintain,
       apDown,
       totalUser,
