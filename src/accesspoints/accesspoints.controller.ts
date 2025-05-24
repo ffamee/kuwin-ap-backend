@@ -75,17 +75,6 @@ export class AccesspointsController {
       clMax_2: 0,
       wlcActive: 'WLC-7',
       eqNumber: '8631',
-      building: {
-        id: 12,
-        idF: 1,
-        idZ: 5,
-        name: 'อาคาร 14',
-        pic: 'pictureBuilding12',
-        comment: '',
-        latitude: '13.84542',
-        longtitude: '100.57015',
-        codeId: 9,
-      },
     },
   })
   @Get(':apid')

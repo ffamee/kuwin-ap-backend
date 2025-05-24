@@ -8,6 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Entity } from './entities/entity.entity';
 import { Repository } from 'typeorm';
 import { SectionService } from '../section/section.service';
+import { AccesspointsService } from '../accesspoints/accesspoints.service';
+import { BuildingsService } from 'src/buildings/buildings.service';
 
 @Injectable()
 export class EntitiesService {
@@ -15,8 +17,11 @@ export class EntitiesService {
     @InjectRepository(Entity)
     private entityRepository: Repository<Entity>,
     @Inject(forwardRef(() => SectionService))
-    // @Inject(forwardRef(() => AccesspointsService))
     private readonly sectionService: SectionService,
+    @Inject(forwardRef(() => BuildingsService))
+    private readonly buildingsService: BuildingsService,
+    @Inject(forwardRef(() => AccesspointsService))
+    private readonly accesspointsService: AccesspointsService,
   ) {}
   // create(createEntityDto: CreateEntityDto) {
   //   return 'This action adds a new entity';
@@ -109,5 +114,35 @@ export class EntitiesService {
       .groupBy('entity.id')
       .addGroupBy('entity.name')
       .getRawMany();
+  }
+
+  async getEntityOverview(entityId: number) {
+    const entity = await this.entityRepository.findOne({
+      where: { id: entityId },
+    });
+    if (!entity) {
+      throw new NotFoundException(`Entity with id ${entityId} not found`);
+    }
+    const [apAll, apMaintain, apDown, totalUser, buildings, accesspoints] =
+      await Promise.all([
+        this.accesspointsService.countAPInEntity(entityId),
+        this.accesspointsService.countAPMaintainInEntity(entityId),
+        this.accesspointsService.countAPDownInEntity(entityId),
+        this.accesspointsService.sumAllClientInEntity(entityId),
+        this.buildingsService.findBuildingWithApCount(entityId),
+        this.accesspointsService.findOverviewApInEntityGroupByBuilding(
+          entityId,
+        ),
+      ]);
+    return {
+      id: entity.id,
+      name: entity.name,
+      apAll,
+      apMaintain,
+      apDown,
+      totalUser,
+      buildings,
+      accesspoints,
+    };
   }
 }

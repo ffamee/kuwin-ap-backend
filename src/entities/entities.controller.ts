@@ -51,6 +51,73 @@ export class EntitiesController {
   }
 
   @ApiOperation({
+    summary: 'Get entity overview by entity ID',
+  })
+  @ApiParam({
+    name: 'entityId',
+    description: 'ID of the entity to get overview for',
+    required: true,
+    type: Number,
+    example: 1,
+  })
+  @ApiNotFoundResponse({
+    description: 'Entity with the given ID not found',
+  })
+  @ApiOkResponse({
+    description: 'Overview of the entity',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        name: { type: 'string', example: 'Entity Name' },
+        apAll: { type: 'number', example: 10 },
+        apMaintain: { type: 'number', example: 5 },
+        apDown: { type: 'number', example: 2 },
+        totalUser: { type: 'number', example: 100 },
+        buildings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number', example: 1 },
+              name: { type: 'string', example: 'Building Name' },
+              apAll: { type: 'number', example: 10 },
+              apMaintain: { type: 'number', example: 5 },
+              apDown: { type: 'number', example: 2 },
+              user1: { type: 'number', example: 50 },
+              user2: { type: 'number', example: 50 },
+            },
+          },
+        },
+        accesspoints: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number', example: 1 },
+                  status: { type: 'string', example: 'active' },
+                  ip: { type: 'string', example: '1.1.1.1' },
+                  name: { type: 'string', example: 'Accesspoint Name' },
+                  location: { type: 'string', example: 'Location Name' },
+                  numberClient: { type: 'number', example: 50 },
+                  numberClient_2: { type: 'number', example: 50 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Get('overview/:entityId')
+  getEntityOverview(@Param('entityId') entityId: string) {
+    return this.entitiesService.getEntityOverview(+entityId);
+  }
+
+  @ApiOperation({
     summary: 'Get all entities in section #{section}',
   })
   @ApiParam({

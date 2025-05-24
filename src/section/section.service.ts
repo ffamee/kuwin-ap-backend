@@ -82,7 +82,7 @@ export class SectionService {
     });
   }
 
-  async getOverview(sec: string) {
+  async getSectionOverview(sec: string) {
     const section = await this.sectionRepository.findOne({
       where: { name: sec },
     });

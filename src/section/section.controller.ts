@@ -1,7 +1,14 @@
 import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { SectionService } from './section.service';
 import { CreateSectionDto } from './dto/create-section.dto';
-import { ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @ApiTags('Section')
 @Controller('section')
@@ -61,9 +68,50 @@ export class SectionController {
     return this.sectionService.findAllName();
   }
 
+  @ApiOperation({
+    summary: 'Get overview of a section {section}',
+  })
+  @ApiParam({
+    name: 'section',
+    description: 'Section name',
+    type: String,
+    example: 'faculty',
+  })
+  @ApiNotFoundResponse({
+    description: 'Section not found',
+  })
+  @ApiOkResponse({
+    description: 'return overview of section',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        name: { type: 'string', example: 'Section 1' },
+        apAll: { type: 'number', example: 10 },
+        apMaintain: { type: 'number', example: 5 },
+        apDown: { type: 'number', example: 2 },
+        totalUser: { type: 'number', example: 100 },
+        entities: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number', example: 1 },
+              name: { type: 'string', example: 'Entity 1' },
+              apAll: { type: 'number', example: 10 },
+              apMaintain: { type: 'number', example: 5 },
+              apDown: { type: 'number', example: 2 },
+              user1: { type: 'number', example: 20 },
+              user2: { type: 'number', example: 80 },
+            },
+          },
+        },
+      },
+    },
+  })
   @Get('overview/:section')
   getOverview(@Param('section') sec: string) {
-    return this.sectionService.getOverview(sec);
+    return this.sectionService.getSectionOverview(sec);
   }
 
   @ApiOperation({
