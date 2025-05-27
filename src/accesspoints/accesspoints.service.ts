@@ -30,6 +30,19 @@ export class AccesspointsService {
   async findOne(id: number): Promise<Accesspoint> {
     const accesspoint = await this.accesspointRepository.findOne({
       where: { id },
+      relations: {
+        building: {
+          entity: {
+            section: true,
+          },
+        },
+      },
+      select: {
+        building: {
+          name: true,
+          entity: { name: true, section: { name: true } },
+        },
+      },
     });
     if (!accesspoint) {
       throw new NotFoundException(`Access point with id ${id} not found`);

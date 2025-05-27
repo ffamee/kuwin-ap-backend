@@ -75,6 +75,15 @@ export class AccesspointsController {
       clMax_2: 0,
       wlcActive: 'WLC-7',
       eqNumber: '8631',
+      building: {
+        name: 'Engineering Building',
+        entity: {
+          name: 'Engineering',
+          section: {
+            name: 'Faculty',
+          },
+        },
+      },
     },
   })
   @Get(':apid')
