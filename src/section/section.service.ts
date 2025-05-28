@@ -107,4 +107,46 @@ export class SectionService {
       entities,
     };
   }
+
+  async findAllOverview() {
+    return this.sectionRepository
+      .createQueryBuilder('section')
+      .leftJoin('section.entities', 'entity')
+      .leftJoin('entity.buildings', 'building')
+      .leftJoin('building.accesspoints', 'accesspoint')
+      .select('section.id', 'id')
+      .addSelect('section.name', 'name')
+      .addSelect('COUNT(accesspoint.id)', 'apAll')
+      .addSelect(
+        `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
+        'apMaintain',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN accesspoint.Status = 'down' THEN 1 END)`,
+        'apDown',
+      )
+      .addSelect('SUM(accesspoint.numberClient)', 'user1')
+      .addSelect('SUM(accesspoint.numberClient_2)', 'user2')
+      .groupBy('section.id')
+      .addGroupBy('section.name')
+      .getRawMany();
+  }
+
+  async getMonitorOverview() {
+    const [apAll, apMaintain, apDown, totalUser, sections] = await Promise.all([
+      this.accesspointsService.countAllAP(),
+      this.accesspointsService.countAllAPMaintain(),
+      this.accesspointsService.countAllAPDown(),
+      this.accesspointsService.sumAllClient(),
+      this.findAllOverview(),
+    ]);
+
+    return {
+      apAll,
+      apMaintain,
+      apDown,
+      totalUser,
+      sections,
+    };
+  }
 }

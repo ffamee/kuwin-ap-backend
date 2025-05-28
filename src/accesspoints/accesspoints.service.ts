@@ -64,6 +64,34 @@ export class AccesspointsService {
     });
   }
 
+  async countAllAP(): Promise<number> {
+    return this.accesspointRepository.count();
+  }
+
+  async countAllAPMaintain(): Promise<number> {
+    return this.accesspointRepository.count({
+      where: {
+        status: 'ma',
+      },
+    });
+  }
+
+  async countAllAPDown(): Promise<number> {
+    return this.accesspointRepository.count({
+      where: {
+        status: 'down',
+      },
+    });
+  }
+
+  async sumAllClient(): Promise<number> {
+    const [sumCl, sumCl2] = await Promise.all([
+      (await this.accesspointRepository.sum('numberClient')) ?? 0,
+      (await this.accesspointRepository.sum('numberClient_2')) ?? 0,
+    ]);
+    return sumCl + sumCl2;
+  }
+
   async countAPInSection(section: string): Promise<number> {
     return this.accesspointRepository.count({
       where: { building: { entity: { section: { name: section } } } },

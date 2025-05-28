@@ -15,6 +15,11 @@ import {
 export class SectionController {
   constructor(private readonly sectionService: SectionService) {}
 
+  @Get('monitor')
+  getMonitorOverview() {
+    return this.sectionService.getMonitorOverview();
+  }
+
   @ApiOperation({
     summary: 'Get everything in sections',
   })
