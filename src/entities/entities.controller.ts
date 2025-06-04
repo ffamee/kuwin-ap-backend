@@ -1,13 +1,12 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { EntitiesService } from './entities.service';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { Entity } from './entities/entity.entity';
 
 @ApiTags('Entity')
 @Controller('entities')
@@ -53,12 +52,18 @@ export class EntitiesController {
   @ApiOperation({
     summary: 'Get entity overview by entity ID',
   })
-  @ApiParam({
-    name: 'entityId',
-    description: 'ID of the entity to get overview for',
+  @ApiQuery({
+    name: 'sec',
     required: true,
+    description:
+      'Section ID (1 for faculty, 2 for organization, 3 for dormitory)',
     type: Number,
-    example: 1,
+  })
+  @ApiQuery({
+    name: 'entity',
+    required: true,
+    description: 'Entity ID',
+    type: Number,
   })
   @ApiNotFoundResponse({
     description: 'Entity with the given ID not found',
@@ -112,41 +117,12 @@ export class EntitiesController {
       },
     },
   })
-  @Get('overview/:entityId')
-  getEntityOverview(@Param('entityId') entityId: string) {
-    return this.entitiesService.getEntityOverview(+entityId);
-  }
-
-  @ApiOperation({
-    summary: 'Get all entities in section #{section}',
-  })
-  @ApiParam({
-    name: 'section',
-    description: 'Section type',
-    required: true,
-    type: String,
-    example: 'faculty',
-  })
-  @ApiNotFoundResponse({
-    description: 'Given section not found',
-  })
-  @ApiOkResponse({
-    description: 'All entities in the section',
-    type: [Entity],
-    example: [
-      {
-        id: 1,
-        name: 'Entity 1',
-      },
-      {
-        id: 2,
-        name: 'Entity 2',
-      },
-    ],
-  })
-  @Get(':section')
-  findOne(@Param('section') section: string) {
-    return this.entitiesService.findOne(section);
+  @Get('overview')
+  getEntityOverview(
+    @Query('sec') section: string,
+    @Query('entity') entityId: string,
+  ) {
+    return this.entitiesService.getEntityOverview(+section, +entityId);
   }
 
   @ApiOperation({

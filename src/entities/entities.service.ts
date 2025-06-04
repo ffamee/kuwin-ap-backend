@@ -31,18 +31,6 @@ export class EntitiesService {
     return this.entityRepository.exists({ where: { id } });
   }
 
-  async findOne(section: string): Promise<Entity[]> {
-    // find all entities by section.secType
-    const sectionExists = await this.sectionService.exist(section);
-    if (!sectionExists) {
-      throw new NotFoundException(`Section with id ${section} not found`);
-    }
-    const entities = await this.entityRepository.find({
-      where: { section: { name: section } },
-    });
-    return entities;
-  }
-
   async findAll(): Promise<{
     faculty: Entity[];
     organization: Entity[];
@@ -116,12 +104,14 @@ export class EntitiesService {
       .getRawMany();
   }
 
-  async getEntityOverview(entityId: number) {
+  async getEntityOverview(section: number, entityId: number) {
     const entity = await this.entityRepository.findOne({
-      where: { id: entityId },
+      where: { id: entityId, section: { id: section } },
     });
     if (!entity) {
-      throw new NotFoundException(`Entity with id ${entityId} not found`);
+      throw new NotFoundException(
+        `Entity with sectionId ${section} and entityId ${entityId} not found`,
+      );
     }
     const [apAll, apMaintain, apDown, totalUser, buildings, accesspoints] =
       await Promise.all([
