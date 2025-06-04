@@ -25,16 +25,6 @@ export class BuildingsService {
     return this.buildingRepository.find();
   }
 
-  async findOne(id: number): Promise<Building[]> {
-    const buildingExist = await this.entityService.exist(id);
-    if (!buildingExist) {
-      throw new NotFoundException(`Building with id ${id} not found`);
-    }
-    return this.buildingRepository.find({
-      where: { entity: { id } },
-    });
-  }
-
   exist(id: number): Promise<boolean> {
     return this.buildingRepository.exists({
       where: { id },
@@ -65,9 +55,16 @@ export class BuildingsService {
       .getRawMany();
   }
 
-  async getBuildingOverview(buildingId: number) {
+  async getBuildingOverview(
+    sectionId: number,
+    entityId: number,
+    buildingId: number,
+  ) {
     const building = await this.buildingRepository.findOne({
-      where: { id: buildingId },
+      where: {
+        id: buildingId,
+        entity: { id: entityId, section: { id: sectionId } },
+      },
       relations: ['accesspoints'],
     });
     if (!building) {

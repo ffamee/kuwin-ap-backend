@@ -1,10 +1,10 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { BuildingsService } from './buildings.service';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { Building } from './entities/building.entity';
@@ -15,12 +15,24 @@ export class BuildingsController {
   constructor(private readonly buildingsService: BuildingsService) {}
 
   @ApiOperation({ summary: 'Get building overview by buildingID' })
-  @ApiParam({
-    name: 'buildingId',
-    description: 'Building ID',
+  @ApiQuery({
+    name: 'sec',
     required: true,
-    type: String,
-    example: '1',
+    description:
+      'Section ID (1 for faculty, 2 for organization, 3 for dormitory)',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'entity',
+    required: true,
+    description: 'Entity ID',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'build',
+    required: true,
+    description: 'Building ID',
+    type: Number,
   })
   @ApiNotFoundResponse({
     description: 'Building with the given ID not found',
@@ -50,53 +62,17 @@ export class BuildingsController {
       },
     },
   })
-  @Get('overview/:buildingId')
-  getBuildingOverview(@Param('buildingId') buildingId: string) {
-    return this.buildingsService.getBuildingOverview(+buildingId);
-  }
-
-  @Get(':entityId')
-  @ApiOperation({ summary: 'Get all buildings in entity #{ID}' })
-  @ApiParam({
-    name: 'entityId',
-    description: 'Entity ID',
-    required: true,
-    type: String,
-    example: '4',
-  })
-  @ApiOkResponse({
-    description: 'All buildings in the entity #{ID}',
-    type: [Building],
-    example: [
-      {
-        id: 22,
-        idF: 4,
-        idZ: 1,
-        name: 'กองกิจการนิสิต',
-        pic: 'student.jpg',
-        comment: '',
-        latitude: '13.84725',
-        longtitude: '100.56861',
-        codeId: 1,
-      },
-      {
-        id: 131,
-        idF: 4,
-        idZ: 1,
-        name: 'อาคารชมรมกิจกรรมนิสิต(ตึก8)',
-        pic: 'pictureBuilding131',
-        comment: '',
-        latitude: null,
-        longtitude: null,
-        codeId: 2,
-      },
-    ],
-  })
-  @ApiNotFoundResponse({
-    description: 'entity #{ID} not found',
-  })
-  findOne(@Param('entityId') entityId: string) {
-    return this.buildingsService.findOne(+entityId);
+  @Get('overview')
+  getBuildingOverview(
+    @Query('sec') sectionId: string,
+    @Query('entity') entityId: string,
+    @Query('build') buildingId: string,
+  ) {
+    return this.buildingsService.getBuildingOverview(
+      +sectionId,
+      +entityId,
+      +buildingId,
+    );
   }
 
   @Get()

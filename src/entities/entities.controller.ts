@@ -119,10 +119,10 @@ export class EntitiesController {
   })
   @Get('overview')
   getEntityOverview(
-    @Query('sec') section: string,
+    @Query('sec') sectionId: string,
     @Query('entity') entityId: string,
   ) {
-    return this.entitiesService.getEntityOverview(+section, +entityId);
+    return this.entitiesService.getEntityOverview(+sectionId, +entityId);
   }
 
   @ApiOperation({

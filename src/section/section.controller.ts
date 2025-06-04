@@ -107,8 +107,8 @@ export class SectionController {
     },
   })
   @Get('overview')
-  getOverview(@Query('sec') sec: string) {
-    return this.sectionService.getSectionOverview(+sec);
+  getOverview(@Query('sec') sectionId: string) {
+    return this.sectionService.getSectionOverview(+sectionId);
   }
 
   @ApiOperation({

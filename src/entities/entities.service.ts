@@ -104,13 +104,13 @@ export class EntitiesService {
       .getRawMany();
   }
 
-  async getEntityOverview(section: number, entityId: number) {
+  async getEntityOverview(sectionId: number, entityId: number) {
     const entity = await this.entityRepository.findOne({
-      where: { id: entityId, section: { id: section } },
+      where: { id: entityId, section: { id: sectionId } },
     });
     if (!entity) {
       throw new NotFoundException(
-        `Entity with sectionId ${section} and entityId ${entityId} not found`,
+        `Entity with sectionId ${sectionId} and entityId ${entityId} not found`,
       );
     }
     const [apAll, apMaintain, apDown, totalUser, buildings, accesspoints] =
