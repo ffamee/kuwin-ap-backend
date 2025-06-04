@@ -92,37 +92,37 @@ export class AccesspointsService {
     return sumCl + sumCl2;
   }
 
-  async countAPInSection(section: string): Promise<number> {
+  async countAPInSection(section: number): Promise<number> {
     return this.accesspointRepository.count({
-      where: { building: { entity: { section: { name: section } } } },
+      where: { building: { entity: { section: { id: section } } } },
     });
   }
 
-  async countAPMaintainInSection(section: string): Promise<number> {
+  async countAPMaintainInSection(section: number): Promise<number> {
     return this.accesspointRepository.count({
       where: {
-        building: { entity: { section: { name: section } } },
+        building: { entity: { section: { id: section } } },
         status: 'ma',
       },
     });
   }
 
-  async countAPDownInSection(section: string): Promise<number> {
+  async countAPDownInSection(section: number): Promise<number> {
     return this.accesspointRepository.count({
       where: {
-        building: { entity: { section: { name: section } } },
+        building: { entity: { section: { id: section } } },
         status: 'down',
       },
     });
   }
 
-  async sumAllClientInSection(section: string): Promise<number> {
+  async sumAllClientInSection(section: number): Promise<number> {
     const [sumCl, sumCl2] = await Promise.all([
       (await this.accesspointRepository.sum('numberClient', {
-        building: { entity: { section: { name: section } } },
+        building: { entity: { section: { id: section } } },
       })) ?? 0,
       (await this.accesspointRepository.sum('numberClient_2', {
-        building: { entity: { section: { name: section } } },
+        building: { entity: { section: { id: section } } },
       })) ?? 0,
     ]);
     return sumCl + sumCl2;

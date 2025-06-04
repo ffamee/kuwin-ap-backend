@@ -91,13 +91,13 @@ export class EntitiesService {
     return entities;
   }
 
-  async findEntitiesWithApCount(section: string) {
+  async findEntitiesWithApCount(section: number) {
     return this.entityRepository
       .createQueryBuilder('entity')
       .leftJoin('entity.section', 'section')
       .leftJoin('entity.buildings', 'building')
       .leftJoin('building.accesspoints', 'accesspoint')
-      .where('section.name = :section', { section })
+      .where('section.id = :section', { section })
       .select('entity.id', 'id')
       .addSelect('entity.name', 'name')
       .addSelect('COUNT(accesspoint.id)', 'apAll')

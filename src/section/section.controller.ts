@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query } from '@nestjs/common';
 import { SectionService } from './section.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import {
@@ -6,7 +6,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 
@@ -18,17 +18,6 @@ export class SectionController {
   @Get('monitor')
   getMonitorOverview() {
     return this.sectionService.getMonitorOverview();
-  }
-
-  @ApiOperation({
-    summary: 'Get everything in sections',
-  })
-  @ApiOkResponse({
-    description: "return everything's name",
-  })
-  @Get('all')
-  findAllData() {
-    return this.sectionService.findAllData();
   }
 
   @ApiOperation({
@@ -74,13 +63,16 @@ export class SectionController {
   }
 
   @ApiOperation({
-    summary: 'Get overview of a section {section}',
+    summary: 'Get overview of a sectionId {sectionId}',
   })
-  @ApiParam({
-    name: 'section',
-    description: 'Section name',
-    type: String,
-    example: 'faculty',
+  @ApiQuery({
+    name: 'sec',
+    required: true,
+    description: 'Section id',
+    schema: {
+      type: 'string',
+      example: '1',
+    },
   })
   @ApiNotFoundResponse({
     description: 'Section not found',
@@ -114,9 +106,9 @@ export class SectionController {
       },
     },
   })
-  @Get('overview/:section')
-  getOverview(@Param('section') sec: string) {
-    return this.sectionService.getSectionOverview(sec);
+  @Get('overview')
+  getOverview(@Query('sec') sec: string) {
+    return this.sectionService.getSectionOverview(+sec);
   }
 
   @ApiOperation({

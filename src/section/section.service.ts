@@ -59,35 +59,12 @@ export class SectionService {
     return sections;
   }
 
-  findAllData(): Promise<Section[]> {
-    return this.sectionRepository.find({
-      select: {
-        id: true,
-        name: true,
-        entities: {
-          id: true,
-          name: true,
-          buildings: {
-            id: true,
-            name: true,
-            accesspoints: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-      where: { id: Not(4) },
-      relations: { entities: { buildings: { accesspoints: true } } },
-    });
-  }
-
-  async getSectionOverview(sec: string) {
+  async getSectionOverview(sec: number) {
     const section = await this.sectionRepository.findOne({
-      where: { name: sec },
+      where: { id: sec },
     });
     if (!section) {
-      throw new NotFoundException(`Section ${sec} not found`);
+      throw new NotFoundException(`SectionId ${sec} not found`);
     }
     const [apAll, apMaintain, apDown, totalUser, entities] = await Promise.all([
       this.accesspointsService.countAPInSection(sec),
