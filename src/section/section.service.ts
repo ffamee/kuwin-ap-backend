@@ -91,6 +91,7 @@ export class SectionService {
       .leftJoin('section.entities', 'entity')
       .leftJoin('entity.buildings', 'building')
       .leftJoin('building.accesspoints', 'accesspoint')
+      .where('section.id != :id', { id: 4 })
       .select('section.id', 'id')
       .addSelect('section.name', 'name')
       .addSelect('COUNT(accesspoint.id)', 'apAll')

@@ -65,13 +65,22 @@ export class AccesspointsService {
   }
 
   async countAllAP(): Promise<number> {
-    return this.accesspointRepository.count();
+    return this.accesspointRepository.count({
+      where: {
+        building: {
+          entity: { section: { id: Not(4) } },
+        },
+      },
+    });
   }
 
   async countAllAPMaintain(): Promise<number> {
     return this.accesspointRepository.count({
       where: {
         status: 'ma',
+        building: {
+          entity: { section: { id: Not(4) } },
+        },
       },
     });
   }
@@ -80,14 +89,21 @@ export class AccesspointsService {
     return this.accesspointRepository.count({
       where: {
         status: 'down',
+        building: {
+          entity: { section: { id: Not(4) } },
+        },
       },
     });
   }
 
   async sumAllClient(): Promise<number> {
     const [sumCl, sumCl2] = await Promise.all([
-      (await this.accesspointRepository.sum('numberClient')) ?? 0,
-      (await this.accesspointRepository.sum('numberClient_2')) ?? 0,
+      (await this.accesspointRepository.sum('numberClient', {
+        building: { entity: { section: { id: Not(4) } } },
+      })) ?? 0,
+      (await this.accesspointRepository.sum('numberClient_2', {
+        building: { entity: { section: { id: Not(4) } } },
+      })) ?? 0,
     ]);
     return sumCl + sumCl2;
   }
