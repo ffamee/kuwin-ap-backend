@@ -1,10 +1,11 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { AccesspointsService } from './accesspoints.service';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { Accesspoint } from './entities/accesspoint.entity';
@@ -13,6 +14,60 @@ import { Accesspoint } from './entities/accesspoint.entity';
 @Controller('accesspoints')
 export class AccesspointsController {
   constructor(private readonly accesspointsService: AccesspointsService) {}
+
+  @ApiOperation({
+    summary:
+      'Get access point detail by section, entity, building, and access point ID',
+  })
+  @ApiQuery({
+    name: 'sec',
+    description: 'Section ID',
+    required: true,
+    type: 'string',
+    example: '1',
+  })
+  @ApiQuery({
+    name: 'entity',
+    description: 'Entity ID',
+    required: true,
+    type: 'string',
+    example: '1',
+  })
+  @ApiQuery({
+    name: 'build',
+    description: 'Building ID',
+    required: true,
+    type: 'string',
+    example: '1',
+  })
+  @ApiQuery({
+    name: 'ap',
+    description: 'Access point ID',
+    required: true,
+    type: 'string',
+    example: '119',
+  })
+  @ApiNotFoundResponse({
+    description: 'Access point not found',
+  })
+  @ApiOkResponse({
+    description: 'Access point detail found',
+    type: Accesspoint,
+  })
+  @Get('detail')
+  getAccesspointDetail(
+    @Query('sec') sectionId: string,
+    @Query('entity') entityId: string,
+    @Query('build') buildingId: string,
+    @Query('ap') apId: string,
+  ) {
+    return this.accesspointsService.getAccesspointDetail(
+      +sectionId,
+      +entityId,
+      +buildingId,
+      +apId,
+    );
+  }
 
   @ApiOperation({
     summary: 'Get access point by ID',
@@ -130,76 +185,6 @@ export class AccesspointsController {
   @Get('/building/name/:buildingId')
   findAllApNameInBuilding(@Param('buildingId') buildingId: string) {
     return this.accesspointsService.findAllApNameInBuilding(+buildingId);
-  }
-
-  @ApiOperation({
-    summary: 'Get all access points in building',
-  })
-  @ApiParam({
-    name: 'buildingId',
-    description: 'Building ID',
-    required: true,
-    type: 'number',
-    example: 287,
-  })
-  @ApiNotFoundResponse({
-    description: 'Building not found',
-  })
-  @ApiOkResponse({
-    description: 'All access points in building #{buildingId}',
-    type: [Accesspoint],
-    example: [
-      {
-        id: 5048,
-        buildingId: 287,
-        status: 'rOff',
-        ip: '172.19.14.150',
-        radMac: '70:6d:15:ab:cd:e0',
-        ethMac: '00:b7:71:01:78:0a',
-        name: 'Agro-Bnew',
-        location: 'อาคารแปรรูป',
-        numberClient: 0,
-        rxbs: null,
-        txbs: null,
-        zone: '2',
-        iqd: 0,
-        oqd: 0,
-        channel: 11,
-        switchIp: '0',
-        model: 'AIR-AP2802E-S-K9',
-        ios: '0',
-        facId: 20,
-        clMax: 47,
-        clAvg: '0.00',
-        timestamp: '13:30:  29/1/2025',
-        sumCl: '5',
-        serial: 'FGL2238A23X',
-        picAp: 'underconstruction.gif',
-        grpBw: 1,
-        grpMan: 1,
-        latitude: '',
-        longtitude: '',
-        switchPortId: 0,
-        installTime: '2025-01-24T09:49:44.000Z',
-        downtimeStart: '2025-04-07T06:31:21.000Z',
-        maId: 1,
-        jobStatus: 'No',
-        timestamp2: '1745812299',
-        crxbs: null,
-        ctxbs: null,
-        wlc: 'Yes',
-        problem: '',
-        channel_2: 64,
-        numberClient_2: 6,
-        clMax_2: 0,
-        wlcActive: 'WLC-7',
-        eqNumber: null,
-      },
-    ],
-  })
-  @Get('/building/:buildingId')
-  findAllApInBuilding(@Param('buildingId') buildingId: string) {
-    return this.accesspointsService.findAllApInBuilding(+buildingId);
   }
 
   @ApiOperation({

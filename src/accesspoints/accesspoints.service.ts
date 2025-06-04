@@ -17,16 +17,6 @@ export class AccesspointsService {
     return this.accesspointRepository.find();
   }
 
-  async findAllApInBuilding(buildingId: number): Promise<Accesspoint[]> {
-    const building = await this.buildingsService.exist(buildingId);
-    if (!building) {
-      throw new NotFoundException('Building not found');
-    }
-    return this.accesspointRepository.find({
-      where: { buildingId },
-    });
-  }
-
   async findOne(id: number): Promise<Accesspoint> {
     const accesspoint = await this.accesspointRepository.findOne({
       where: { id },
@@ -258,5 +248,41 @@ export class AccesspointsService {
       })) ?? 0,
     ]);
     return sumCl + sumCl2;
+  }
+
+  async getAccesspointDetail(
+    sectionId: number,
+    entityId: number,
+    buildingId: number,
+    apId: number,
+  ): Promise<Accesspoint> {
+    const accesspoint = await this.accesspointRepository.findOne({
+      where: {
+        id: apId,
+        building: {
+          id: buildingId,
+          entity: { id: entityId, section: { id: sectionId } },
+        },
+      },
+      relations: {
+        building: {
+          entity: {
+            section: true,
+          },
+        },
+      },
+      select: {
+        building: {
+          name: true,
+          entity: { name: true, section: { name: true } },
+        },
+      },
+    });
+    if (!accesspoint) {
+      throw new NotFoundException(
+        `Access point with id ${apId} not found in section ${sectionId}, entity ${entityId}, building ${buildingId}`,
+      );
+    }
+    return accesspoint;
   }
 }
