@@ -11,6 +11,8 @@ import { SectionModule } from './section/section.module';
 import { EntitiesModule } from './entities/entities.module';
 import { BuildingsModule } from './buildings/buildings.module';
 import { AccesspointsModule } from './accesspoints/accesspoints.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TaskModule } from './task/task.module';
 
 @Module({
   imports: [
@@ -18,6 +20,7 @@ import { AccesspointsModule } from './accesspoints/accesspoints.module';
       envFilePath: '.env',
     }),
     TypeOrmModule.forRoot(dataSourceOptions),
+    ScheduleModule.forRoot(),
     ZonesModule,
     UsersModule,
     AuthModule,
@@ -25,6 +28,7 @@ import { AccesspointsModule } from './accesspoints/accesspoints.module';
     EntitiesModule,
     BuildingsModule,
     AccesspointsModule,
+    TaskModule,
   ],
   controllers: [AppController],
   providers: [AppService],
