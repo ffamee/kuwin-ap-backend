@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -8,6 +9,8 @@ import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtPayload } from 'src/shared/types/auth-response.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -16,8 +19,10 @@ export class UsersService {
   ) {}
 
   findAll(): Promise<User[]> {
-    console.log('This action returns all users');
-    return this.userRepository.find();
+    // console.log('This action returns all users');
+    return this.userRepository.find({
+      select: ['id', 'username', 'privilege'],
+    });
   }
 
   findUserLogin(username: string): Promise<User | null> {
@@ -90,5 +95,49 @@ export class UsersService {
       throw new NotFoundException('User not found from token');
     }
     return userProfile;
+  }
+
+  async addUser(user: CreateUserDto): Promise<User> {
+    if (
+      await this.userRepository.exists({ where: { username: user.username } })
+    ) {
+      throw new ConflictException('User already exists');
+    }
+    return await this.userRepository.save({
+      ...user,
+      password: await bcrypt.hash(user.password, 10),
+    });
+  }
+
+  async remove(id: string) {
+    if (!(await this.userRepository.exists({ where: { id } }))) {
+      throw new NotFoundException('User not found');
+    }
+    return this.userRepository.delete(id).then(() => {
+      return { message: 'User deleted successfully' };
+    });
+  }
+
+  async editUser(id: string, user: UpdateUserDto): Promise<User> {
+    if (!(await this.userRepository.exists({ where: { id } }))) {
+      throw new NotFoundException('User not found');
+    }
+    if (
+      await this.userRepository.exists({
+        where: { username: user.username },
+      })
+    ) {
+      throw new ConflictException('Username already exists');
+    }
+    if (user.password) {
+      user.password = await bcrypt.hash(user.password, 10);
+    } else {
+      const existingUser = await this.userRepository.findOne({ where: { id } });
+      user.password = existingUser?.password; // Keep the existing password if not provided
+    }
+    return await this.userRepository.save({
+      ...user,
+      id,
+    });
   }
 }

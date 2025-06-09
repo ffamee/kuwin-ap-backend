@@ -7,6 +7,7 @@ import {
   // Delete,
   UseGuards,
   Req,
+  Delete,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards';
@@ -14,6 +15,7 @@ import { Request } from 'express';
 import { JwtPayload } from 'src/shared/types/auth-response.dto';
 import {
   ApiBody,
+  ApiConflictResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -23,6 +25,8 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { User } from './entities/user.entity';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiTags('User')
 @Controller('users')
@@ -63,6 +67,38 @@ export class UsersController {
     return this.usersService.getUserProfile(user);
   }
 
+  // @Get('hash')
+  // genHash() {
+  //   return this.usersService.genHash();
+  // }
+
+  @ApiOperation({
+    summary: 'Get user by username',
+  })
+  @ApiParam({
+    name: 'username',
+    description: 'Username of the user',
+    type: 'string',
+    example: 'test',
+  })
+  @ApiOkResponse({
+    description: 'User details',
+    type: User,
+    example: {
+      id: 'e8c1adbd-240d-11f0-bdaf-ca1a739b326a',
+      username: 'test',
+      password: '$2b$10$Q8m2uHlI2s61rqr1OfpT6.xR9ud.KJMruyo2sRvGPX4wGVYJUlsGK',
+      privilege: 2,
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Not found user that name "username"',
+  })
+  @Get(':username')
+  findOne(@Param('username') username: string) {
+    return this.usersService.findOne(username);
+  }
+
   @ApiOperation({
     summary: '*Unused* Login with username and password',
   })
@@ -98,40 +134,85 @@ export class UsersController {
     return this.usersService.check(username, password);
   }
 
-  // @Get('hash')
-  // genHash() {
-  //   return this.usersService.genHash();
-  // }
-
   @ApiOperation({
-    summary: 'Get user by username',
+    summary: 'Add a new user',
   })
-  @ApiParam({
-    name: 'username',
-    description: 'Username of the user',
-    type: 'string',
-    example: 'test',
+  @ApiBody({
+    description: 'User details to be added',
+    type: CreateUserDto,
+  })
+  @ApiConflictResponse({
+    description: 'Username already exists',
   })
   @ApiOkResponse({
-    description: 'User details',
+    description: 'User added successfully',
     type: User,
     example: {
-      id: 'e8c1adbd-240d-11f0-bdaf-ca1a739b326a',
-      username: 'test',
+      id: 'e8c1adbd-240d-11f0-bdaf-ca1a739b326',
+      username: 'newuser',
       password: '$2b$10$Q8m2uHlI2s61rqr1OfpT6.xR9ud.KJMruyo2sRvGPX4wGVYJUlsGK',
       privilege: 2,
     },
   })
-  @ApiNotFoundResponse({
-    description: 'Not found user that name "username"',
-  })
-  @Get(':username')
-  findOne(@Param('username') username: string) {
-    return this.usersService.findOne(username);
+  @UseGuards(JwtAuthGuard)
+  @Post('add')
+  addUser(@Body() user: CreateUserDto) {
+    return this.usersService.addUser(user);
   }
 
-  // @Delete(':id')
-  // remove(@Param('id') id: string) {
-  //   return this.usersService.remove(+id);
-  // }
+  @ApiOperation({
+    summary: 'Edit a user by ID',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID of the user to be edited',
+    type: 'string',
+    example: 'e8c1adbd-240d-11f0-bdaf-ca1a739b326',
+  })
+  @ApiBody({
+    description: 'User details to be edited',
+    type: UpdateUserDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'User not found',
+  })
+  @ApiConflictResponse({
+    description: 'Username already exists',
+  })
+  @ApiOkResponse({
+    description: 'User edited successfully',
+    type: User,
+    example: {
+      id: 'e8c1adbd-240d-11f0-bdaf-ca1a739b326',
+      username: 'editeduser',
+      password: '$2b$10$Q8m2uHlI2s61rqr1OfpT6.xR9ud.KJMruyo2sRvGPX4wGVYJUlsGK',
+      privilege: 2,
+    },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Post('/edit/:id')
+  editUser(@Param('id') id: string, @Body() user: UpdateUserDto) {
+    return this.usersService.editUser(id, user);
+  }
+
+  @ApiOperation({
+    summary: 'Delete a user by ID',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID of the user to be deleted',
+    type: 'number',
+    example: 1,
+  })
+  @ApiNotFoundResponse({
+    description: 'User not found',
+  })
+  @ApiOkResponse({
+    description: 'User deleted successfully',
+  })
+  @UseGuards(JwtAuthGuard)
+  @Delete('/delete/:id')
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(id);
+  }
 }
