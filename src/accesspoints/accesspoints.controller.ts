@@ -70,6 +70,34 @@ export class AccesspointsController {
   }
 
   @ApiOperation({
+    summary: 'Get all access points that are down',
+  })
+  @ApiOkResponse({
+    description: 'All access points that are down',
+    type: [Accesspoint],
+    example: [
+      {
+        id: 1,
+        buildingId: 1,
+        name: 'Access Point 1',
+        location: 'Location 1',
+        status: 'down',
+      },
+      {
+        id: 2,
+        buildingId: 2,
+        name: 'Access Point 2',
+        location: 'Location 2',
+        status: 'down',
+      },
+    ],
+  })
+  @Get('down')
+  findAllDownAccesspoints() {
+    return this.accesspointsService.findAllDownAccesspoints();
+  }
+
+  @ApiOperation({
     summary: 'Get access point by ID',
   })
   @ApiParam({

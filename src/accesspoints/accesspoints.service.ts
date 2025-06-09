@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Accesspoint } from './entities/accesspoint.entity';
-import { Not, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { BuildingsService } from '../buildings/buildings.service';
 import { ResponseAccesspointOverviewDto } from './dto/response-accesspoint.dto';
 
@@ -284,5 +284,20 @@ export class AccesspointsService {
       );
     }
     return accesspoint;
+  }
+
+  findAllDownAccesspoints(): Promise<Accesspoint[]> {
+    return this.accesspointRepository.find({
+      where: { status: In(['down', 'ma']) },
+      select: {
+        id: true,
+        name: true,
+        ip: true,
+        status: true,
+        location: true,
+        downtimeStart: true,
+        jobStatus: true,
+      },
+    });
   }
 }
