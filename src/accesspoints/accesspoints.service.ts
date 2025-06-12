@@ -35,6 +35,13 @@ export class AccesspointsService {
           },
         },
       },
+      relations: {
+        building: {
+          entity: {
+            section: true,
+          },
+        },
+      },
     });
   }
 
@@ -325,6 +332,13 @@ export class AccesspointsService {
             section: {
               id: true,
             },
+          },
+        },
+      },
+      relations: {
+        building: {
+          entity: {
+            section: true,
           },
         },
       },
