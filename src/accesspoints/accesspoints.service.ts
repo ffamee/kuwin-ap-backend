@@ -14,7 +14,28 @@ export class AccesspointsService {
   ) {}
 
   findAll(): Promise<Accesspoint[]> {
-    return this.accesspointRepository.find();
+    return this.accesspointRepository.find({
+      select: {
+        id: true,
+        name: true,
+        ip: true,
+        status: true,
+        location: true,
+        numberClient: true,
+        numberClient_2: true,
+        wlcActive: true,
+        wlc: true,
+        building: {
+          id: true,
+          entity: {
+            id: true,
+            section: {
+              id: true,
+            },
+          },
+        },
+      },
+    });
   }
 
   async findOne(id: number): Promise<Accesspoint> {
@@ -297,6 +318,15 @@ export class AccesspointsService {
         location: true,
         downtimeStart: true,
         jobStatus: true,
+        building: {
+          id: true,
+          entity: {
+            id: true,
+            section: {
+              id: true,
+            },
+          },
+        },
       },
     });
   }
