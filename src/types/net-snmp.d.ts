@@ -263,7 +263,7 @@ declare module 'net-snmp' {
    */
   interface Varbind {
     oid: string;
-    type: ObjectType;
+    type: number;
     value: string | number | boolean | Buffer | null | undefined;
   }
 
@@ -271,6 +271,24 @@ declare module 'net-snmp' {
    * Common callback function signature for asynchronous operations.
    */
   type Callback<T> = (error: Error | null, result?: T) => void;
+
+  /**
+   * Callback type for `session.walk`'s optional `feedbackFunction`.
+   * It's called after each GetNextRequest response.
+   * If it returns a non-null value, the walk is terminated, and that value is passed to the final callback.
+   * @param varbinds An array of varbinds retrieved in the current step.
+   * @returns Any value to terminate the walk, or `null` to continue.
+   */
+  type WalkFeedbackFunction = (varbinds: Varbind[]) => any | null;
+
+  /**
+   * Callback type for `session.walk` when a `feedbackFunction` is provided.
+   * The `result` can be either the collected `Varbind[]` or the value returned by `feedbackFunction`.
+   */
+  type WalkCallbackWithFeedbackValue = (
+    error: Error | null,
+    result?: Varbind[] | any,
+  ) => void;
 
   /**
    * Options for creating an SNMP Session (v1/v2c).
@@ -503,7 +521,7 @@ declare module 'net-snmp' {
      * @param oids An array of OID strings.
      * @param callback The callback function to handle the response.
      */
-    get(oids: string, callback: Callback<Varbind>): void;
+    get(oids: string[], callback: Callback<Varbind[]>): void;
 
     /**
      * Fetches values for OIDs lexicographically following specified OIDs,
@@ -514,10 +532,10 @@ declare module 'net-snmp' {
      * @param callback The callback function to handle the response.
      */
     getBulk(
-      oids: string,
+      oids: string[],
       nonRepeaters: number,
       maxRepetitions: number,
-      callback: Callback<Varbind>,
+      callback: Callback<Varbind[]>,
     ): void;
 
     /**
@@ -525,7 +543,7 @@ declare module 'net-snmp' {
      * @param oids An array of OID strings.
      * @param callback The callback function to handle the response.
      */
-    getNext(oids: string, callback: Callback<Varbind>): void;
+    getNext(oids: string[], callback: Callback<Varbind>): void;
 
     /**
      * Sends an SNMP inform.
@@ -601,6 +619,55 @@ declare module 'net-snmp' {
       varbinds: Varbind,
       agentAddrOrOptions?: string | { agentAddr?: string },
       callback?: Callback<void>,
+    ): void;
+
+    /**
+     * Performs an SNMP walk operation (sequence of GetNextRequests or GetBulkRequests).
+     *
+     * @param oid The starting OID for the walk. Can be a string or an array of numbers.
+     * @param callback The final callback function. Receives an error or an array of all varbinds collected during the walk.
+     */
+    walk(oid: Oid, callback: Callback): void;
+
+    /**
+     * Performs an SNMP walk operation with a specified maximum repetitions.
+     *
+     * @param oid The starting OID for the walk.
+     * @param maxRepetitions The maximum number of repetitions per GetBulkRequest (for SNMP v2c/v3).
+     * @param callback The final callback function. Receives an error or an array of all varbinds collected during the walk.
+     */
+    walk(oid: Oid, maxRepetitions: number, callback: Callback): void;
+
+    /**
+     * Performs an SNMP walk operation with a feedback function.
+     *
+     * @param oid The starting OID for the walk.
+     * @param feedbackFunction A function called after each GetNextRequest response with the current set of varbinds.
+     * If it returns a non-null value, the walk is terminated, and this value is passed to the final callback.
+     * @param callback The final callback function. Receives an error or an array of all varbinds collected,
+     * or the value returned by `feedbackFunction` if the walk was terminated.
+     */
+    walk(
+      oid: Oid,
+      feedbackFunction: WalkFeedbackFunction,
+      callback: WalkCallbackWithFeedbackValue,
+    ): void;
+
+    /**
+     * Performs an SNMP walk operation with specified maximum repetitions and a feedback function.
+     *
+     * @param oid The starting OID for the walk.
+     * @param maxRepetitions The maximum number of repetitions per GetBulkRequest (for SNMP v2c/v3).
+     * @param feedbackFunction A function called after each GetNextRequest response with the current set of varbinds.
+     * If it returns a non-null value, the walk is terminated, and this value is passed to the final callback.
+     * @param callback The final callback function. Receives an error or an array of all varbinds collected,
+     * or the value returned by `feedbackFunction` if the walk was terminated.
+     */
+    walk(
+      oid: Oid,
+      maxRepetitions: number,
+      feedbackFunction: WalkFeedbackFunction,
+      callback: WalkCallbackWithFeedbackValue,
     ): void;
 
     /**
@@ -1304,6 +1371,9 @@ declare module 'net-snmp' {
     OidFormat,
     MibProviderType,
   };
+
+  // Export interfaces directly
+  export { Varbind };
 
   // Export classes directly
   export {
