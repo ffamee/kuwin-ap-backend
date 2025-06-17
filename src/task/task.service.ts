@@ -7,9 +7,6 @@ import * as snmp from 'net-snmp';
 @Injectable()
 export class TaskService {
   private readonly oids = [`1.3.6.1.4.1.14179.2.2.1.1.3.204.127.117.89.34.32`];
-  private readonly session = snmp.createSession('172.16.26.11', 'KUWINTEST', {
-    version: snmp.Version['2c'],
-  });
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   handleCron() {
@@ -24,7 +21,7 @@ export class TaskService {
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   // @Interval(5000)
-  test() {
+  async test() {
     // console log every key in snmp version type
     console.log('Called Every 10 Seconds');
     // const execPath = path.resolve(__dirname, '../../test_c.c');
@@ -62,7 +59,12 @@ export class TaskService {
     //     }
     //   }
     // });
-    const oid = '1.3.6.1.4.1.14179.2.1.4.1.1';
+    const oidClient = '1.3.6.1.4.1.14179.2.2.2.1.15'; // No. of clients connected to AP
+    const oidRx = '1.3.6.1.4.1.9.9.513.1.2.2.1.13'; // Rx bytes
+    // const oidTx = '1.3.6.1.4.1.9.9.513.1.2.2.1.14'; // Tx bytes
+    const session = snmp.createSession('172.16.26.11', 'KUWINTEST', {
+      version: snmp.Version['2c'],
+    });
 
     function doneCb(error: snmp.NetSnmpError) {
       if (error) console.error(error.message);
@@ -75,7 +77,12 @@ export class TaskService {
     //     else console.log(varbinds[i].oid + '|' + (varbinds[i].value as string));
     //   }
     // }
-    function feedCb(varbinds: snmp.Varbind[]) {
+    function feedCb(
+      varbinds: snmp.Varbind[],
+      oid: string,
+      display: (varbind: snmp.Varbind) => void,
+      terminated?: (varbind: snmp.Varbind) => void,
+    ) {
       for (let i = 0; i < varbinds.length; i++) {
         const varbind = varbinds[i];
 
@@ -90,7 +97,7 @@ export class TaskService {
           // คุณต้องกำหนดเงื่อนไขการหยุดที่เหมาะสมกับ MIB ของคุณ
           // ตัวอย่าง: ถ้าต้องการหยุดเมื่อ OID ออกนอก subtree ที่เริ่มต้น
           // .substring(0, oid.lastIndexOf('.'))
-          if (!varbind.oid.startsWith(oid)) {
+          if (terminated ? terminated(varbind) : !varbind.oid.startsWith(oid)) {
             console.log(
               `Terminating walk: OID ${varbind.oid} is outside the target subtree.`,
             );
@@ -100,20 +107,8 @@ export class TaskService {
               lastOid: varbind.oid,
             };
           }
-          // check type of varbind type equal to 'OctetString'
-          if (varbind.type === snmp.ObjectType.OctetString) {
-            console.log(
-              varbind.oid +
-                ' | ' +
-                (varbind.value as Buffer)
-                  .toString('hex')
-                  .toUpperCase()
-                  .replace(/(.{2})/g, '$1 ')
-                  .trim(),
-            );
-          } else {
-            console.log(varbind.oid + ' | ' + (varbind.value as string));
-          }
+          // display the varbind by calling the provided display function
+          display(varbind);
 
           // หรือถ้าต้องการหยุดที่ OID ตัวใดตัวหนึ่งโดยเฉพาะ
           // if (varbind.oid === '1.3.6.1.4.1.14179.2.2.1.1.3.999') { // สมมติว่ามี OID นี้
@@ -155,8 +150,57 @@ export class TaskService {
       return null; // คืนค่า null เพื่อให้ walk ดำเนินต่อไป
     }
 
-    const maxRepetitions = 10;
+    function ClientFeedCb(varbinds: snmp.Varbind[]) {
+      return feedCb(varbinds, oidClient, (varbind: snmp.Varbind) => {
+        console.log(varbind.oid + ' | ' + (varbind.value as string));
+      });
+    }
+    function RxTxFeedCb(varbinds: snmp.Varbind[]) {
+      return feedCb(
+        varbinds,
+        oidRx,
+        (varbind: snmp.Varbind) => {
+          const value = varbind.value as number;
+          const out =
+            (varbind.oid.split('.')[13] === '13'
+              ? 'Received Rate '
+              : 'Transmitted Rate ') +
+            ('of ' + varbind.oid + ' | ');
+          if (value > 1 << 30) {
+            console.log(out + (value / (1 << 30)).toFixed(2) + ' GB');
+          } else if (value > 1 << 20) {
+            console.log(out + (value / (1 << 20)).toFixed(2) + ' MB');
+          } else if (value > 1 << 10) {
+            console.log(out + (value / (1 << 10)).toFixed(2) + ' KB');
+          } else {
+            console.log(out + value + ' B');
+          }
+        },
+        (varbind: snmp.Varbind) =>
+          varbind.oid >= '1.3.6.1.4.1.9.9.513.1.2.2.1.15',
+      );
+    }
+    // function MacFeedCb(varbinds: snmp.Varbind[]) {
+    //   return feedCb(varbinds, oidClient, (varbind: snmp.Varbind) => {
+    //     console.log(
+    //       varbind.oid +
+    //         ' | ' +
+    //         (varbind.value as Buffer)
+    //           .toString('hex')
+    //           .toUpperCase()
+    //           .replace(/(.{2})/g, '$1 ')
+    //           .trim(),
+    //     );
+    //   });
+    // }
 
-    this.session.walk(oid, maxRepetitions, feedCb, doneCb);
+    const maxRepetitions = 20;
+
+    // session.walk(oid, maxRepetitions, feedCb, doneCb);
+    // wait for walk to complete before closing the session
+    await new Promise(() => {
+      session.walk(oidClient, maxRepetitions, ClientFeedCb, doneCb);
+      session.walk(oidRx, maxRepetitions, RxTxFeedCb, doneCb);
+    }).then(() => session.close());
   }
 }
