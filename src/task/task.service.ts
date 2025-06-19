@@ -1,12 +1,91 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as snmp from 'net-snmp';
+import { InfluxService } from '../influx/influx.service';
 // import { exec } from 'child_process';
 // import * as path from 'path';
+interface ResolvedOid {
+  name: string | null; // ชื่อของ OID เช่น 'client-2.4', 'rx', 'tx'
+  macAddress: string | null; // MAC Address ที่ถูกแปลงให้อยู่ในรูปแบบ 'XX:XX:XX:XX:XX:XX'
+  originalOid: string; // OID เดิมที่ส่งเข้ามา
+}
 
 @Injectable()
 export class TaskService {
   private readonly oids = [`1.3.6.1.4.1.14179.2.2.1.1.3.204.127.117.89.34.32`];
+  private resolveSnmpOid = (oid: string): ResolvedOid => {
+    const result: ResolvedOid = {
+      name: null,
+      macAddress: null,
+      originalOid: oid,
+    };
+
+    // Helper function to convert OID-style MAC to standard MAC address
+    // e.g., '1.2.3.4.5.6' -> '01:02:03:04:05:06'
+    const convertOidMacToStandard = (oidMac: string): string => {
+      return oidMac
+        .split('.')
+        .map((segment) => parseInt(segment).toString(16).padStart(2, '0'))
+        .join(':');
+      // .toUpperCase();
+    };
+
+    // 1. ตรวจสอบเงื่อนไขสำหรับ 'client-2.4' หรือ 'client-5'
+    // '1.3.6.1.4.1.14179.2.2.2.1.15.x.x.x.x.x.x.0' หรือ '.1'
+    const clientBaseOid = '1.3.6.1.4.1.14179.2.2.2.1.15.';
+    if (oid.startsWith(clientBaseOid)) {
+      const remaining = oid.substring(clientBaseOid.length); // x.x.x.x.x.x.0 หรือ x.x.x.x.x.x.1
+      const parts = remaining.split('.');
+
+      if (parts.length === 7) {
+        // ต้องมี 6 หลัก MAC + 1 หลักสุดท้าย (.0 หรือ .1)
+        const oidMac = parts.slice(0, 6).join('.');
+        const lastSegment = parts[6];
+
+        result.macAddress = convertOidMacToStandard(oidMac);
+
+        if (lastSegment === '0') {
+          result.name = 'client-2.4';
+        } else if (lastSegment === '1') {
+          result.name = 'client-5';
+        }
+      }
+    }
+
+    // 2. ตรวจสอบเงื่อนไขสำหรับ 'rx'
+    // '1.3.6.1.4.1.9.9.513.1.2.2.1.13.x.x.x.x.x.x'
+    const rxBaseOid = '1.3.6.1.4.1.9.9.513.1.2.2.1.13.';
+    if (oid.startsWith(rxBaseOid)) {
+      const remaining = oid.substring(rxBaseOid.length); // x.x.x.x.x.x
+      const parts = remaining.split('.');
+
+      if (parts.length === 7) {
+        // ต้องมี 6 หลัก MAC
+        const oidMac = parts.slice(0, 6).join('.');
+        result.macAddress = convertOidMacToStandard(oidMac);
+        result.name = 'rx';
+      }
+    }
+
+    // 3. ตรวจสอบเงื่อนไขสำหรับ 'tx'
+    // '1.3.6.1.4.1.9.9.513.1.2.2.1.14.x.x.x.x.x.x'
+    const txBaseOid = '1.3.6.1.4.1.9.9.513.1.2.2.1.14.';
+    if (oid.startsWith(txBaseOid)) {
+      const remaining = oid.substring(txBaseOid.length); // x.x.x.x.x.x
+      const parts = remaining.split('.');
+
+      if (parts.length === 7) {
+        // ต้องมี 6 หลัก MAC
+        const oidMac = parts.slice(0, 6).join('.');
+        result.macAddress = convertOidMacToStandard(oidMac);
+        result.name = 'tx';
+      }
+    }
+
+    return result;
+  };
+
+  constructor(private readonly influxService: InfluxService) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   handleCron() {
@@ -16,14 +95,14 @@ export class TaskService {
   // This method is called every minute using the cron expression '* * * * *'
   @Cron('* * * * *')
   handleOwnExpression() {
-    console.log('Called Every Minute', snmp.Version['2c']);
+    console.log('Called Every Minute');
   }
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   // @Interval(5000)
   async test() {
     // console log every key in snmp version type
-    console.log('Called Every 10 Seconds');
+    console.log('Called Every 30 Seconds');
     // const execPath = path.resolve(__dirname, '../../test_c.c');
     // const outPath = path.resolve(__dirname, '../../test.exe');
     // const testSnmp = path.resolve(__dirname, '../../test-snmp');
@@ -59,6 +138,8 @@ export class TaskService {
     //     }
     //   }
     // });
+    // const client: Record<string, number> = {};
+    const data: Record<string, Record<string, any>> = {};
     const oidClient = '1.3.6.1.4.1.14179.2.2.2.1.15'; // No. of clients connected to AP
     const oidRx = '1.3.6.1.4.1.9.9.513.1.2.2.1.13'; // Rx bytes
     // const oidTx = '1.3.6.1.4.1.9.9.513.1.2.2.1.14'; // Tx bytes
@@ -66,9 +147,9 @@ export class TaskService {
       version: snmp.Version['2c'],
     });
 
-    function doneCb(error: snmp.NetSnmpError) {
-      if (error) console.error(error.message);
-    }
+    // function doneCb(error: snmp.NetSnmpError) {
+    //   if (error) console.error(error.message);
+    // }
 
     // function feedCb(varbinds: snmp.Varbind[]) {
     //   for (let i = 0; i < varbinds.length; i++) {
@@ -77,12 +158,12 @@ export class TaskService {
     //     else console.log(varbinds[i].oid + '|' + (varbinds[i].value as string));
     //   }
     // }
-    function feedCb(
+    const feedCb = (
       varbinds: snmp.Varbind[],
       oid: string,
       display: (varbind: snmp.Varbind) => void,
       terminated?: (varbind: snmp.Varbind) => void,
-    ) {
+    ) => {
       for (let i = 0; i < varbinds.length; i++) {
         const varbind = varbinds[i];
 
@@ -109,53 +190,31 @@ export class TaskService {
           }
           // display the varbind by calling the provided display function
           display(varbind);
-
-          // หรือถ้าต้องการหยุดที่ OID ตัวใดตัวหนึ่งโดยเฉพาะ
-          // if (varbind.oid === '1.3.6.1.4.1.14179.2.2.1.1.3.999') { // สมมติว่ามี OID นี้
-          //     console.log(`Terminating walk: Reached specific OID ${varbind.oid}`);
-          //     return { terminated: true, reason: "Reached specific OID", lastOid: varbind.oid };
-          // }
-
-          // หรือถ้าคุณมีขอบเขต OID ชัดเจนว่าต้องการหยุดที่ไหน
-          // เช่น ถ้า '1.3.6.1.4.1.14179.2.2.1.1.3' เป็นจุดเริ่มต้นของ array/table
-          // และอยากจะหยุดเมื่อ OID index นั้นๆ เกินกว่าค่าที่กำหนด
-          // คุณอาจจะต้องแยก OID เป็นส่วนๆ แล้วเปรียบเทียบ
-          // ตัวอย่าง:
-          // const oidParts =
-          //   typeof varbind.oid === 'string'
-          //     ? varbind.oid.split('.').map(Number)
-          //     : varbind.oid;
-          // const baseOidParts = targetOidPrefix.split('.').map(Number);
-
-          // สมมติว่า '1.3.6.1.4.1.14179.2.2.1.1.3' คือ base OID ของ table index
-          // และคุณต้องการเดินแค่ 100 instance ถัดจาก OID นั้น
-          // คุณต้องหา index ของ instance ใน OID นั้น
-          // if (oidParts.length > baseOidParts.length) {
-          //   const instanceIndex = oidParts[baseOidParts.length]; // เช่น 1.3.6.1.4.1.14179.2.2.1.1.3.<instanceIndex>
-          //   // สมมติว่าต้องการหยุดเมื่อ instanceIndex เกิน 10
-          //   if (instanceIndex > 100) {
-          //     // หรือค่าอื่นๆ ที่คุณต้องการ
-          //     console.log(
-          //       `Terminating walk: Instance index ${instanceIndex} exceeds limit.`,
-          //     );
-          //     return {
-          //       terminated: true,
-          //       reason: 'Instance limit reached',
-          //       lastOid: varbind.oid,
-          //     };
-          //   }
-          // }
+          const name = this.resolveSnmpOid(varbind.oid);
+          if (!name.name || !name.macAddress) {
+            console.log(name);
+            continue; // Skip if name or macAddress is not resolved
+          }
+          const val =
+            name.name === 'rx' || name.name === 'tx'
+              ? ((data[name.macAddress][name.name] ?? 0) as number) +
+                (varbind.value as number)
+              : varbind.value;
+          data[name.macAddress] = {
+            ...data[name.macAddress],
+            [name.name]: val,
+          };
         }
       }
       return null; // คืนค่า null เพื่อให้ walk ดำเนินต่อไป
-    }
+    };
 
-    function ClientFeedCb(varbinds: snmp.Varbind[]) {
+    const ClientFeedCb = (varbinds: snmp.Varbind[]) => {
       return feedCb(varbinds, oidClient, (varbind: snmp.Varbind) => {
         console.log(varbind.oid + ' | ' + (varbind.value as string));
       });
-    }
-    function RxTxFeedCb(varbinds: snmp.Varbind[]) {
+    };
+    const RxTxFeedCb = (varbinds: snmp.Varbind[]) => {
       return feedCb(
         varbinds,
         oidRx,
@@ -179,7 +238,7 @@ export class TaskService {
         (varbind: snmp.Varbind) =>
           varbind.oid >= '1.3.6.1.4.1.9.9.513.1.2.2.1.15',
       );
-    }
+    };
     // function MacFeedCb(varbinds: snmp.Varbind[]) {
     //   return feedCb(varbinds, oidClient, (varbind: snmp.Varbind) => {
     //     console.log(
@@ -196,11 +255,78 @@ export class TaskService {
 
     const maxRepetitions = 20;
 
+    function walkClient(session: snmp.Session) {
+      return new Promise((resolve, reject) => {
+        session.walk(
+          oidClient,
+          maxRepetitions,
+          ClientFeedCb,
+          (error: snmp.NetSnmpError) => {
+            if (error) {
+              reject(error);
+            }
+            resolve(true);
+          },
+        );
+      });
+    }
+
+    function walkRxTx(session: snmp.Session) {
+      return new Promise((resolve, reject) => {
+        session.walk(
+          oidRx,
+          maxRepetitions,
+          RxTxFeedCb,
+          (error: snmp.NetSnmpError) => {
+            if (error) {
+              reject(error);
+            }
+            resolve(true);
+          },
+        );
+      });
+    }
+
     // session.walk(oid, maxRepetitions, feedCb, doneCb);
     // wait for walk to complete before closing the session
-    await new Promise(() => {
-      session.walk(oidClient, maxRepetitions, ClientFeedCb, doneCb);
-      session.walk(oidRx, maxRepetitions, RxTxFeedCb, doneCb);
-    }).then(() => session.close());
+    // await new Promise((resolve) => {
+    //   session.walk(
+    //     oidClient,
+    //     maxRepetitions,
+    //     ClientFeedCb,
+    //     doneCb,
+    //     // (error: snmp.NetSnmpError) => {
+    //     //   if (error) reject(error);
+    //     // },
+    //   );
+    //   // session.walk(oidRx, maxRepetitions, RxTxFeedCb, doneCb);
+    //   resolve(true);
+    // }).then(() => {
+    //   console.log('Walk completed');
+    //   console.log('Client:', client);
+    //   session.close();
+    // });
+    try {
+      await Promise.all([walkClient(session), walkRxTx(session)]);
+      for (const mac in data) {
+        if (Object.prototype.hasOwnProperty.call(data, mac)) {
+          // Write each client's data to InfluxDB
+          await this.influxService.writePoint(
+            'ap_metrics',
+            data[mac],
+            {
+              mac_address: mac,
+            },
+            new Date(),
+          );
+        }
+      }
+      // console.log('Data collected:', data);
+      console.log('Walk completed');
+      session.close();
+    } catch (error) {
+      console.error('Error during SNMP walk:', error);
+      session.close();
+    }
   }
 }

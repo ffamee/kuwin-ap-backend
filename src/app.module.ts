@@ -12,6 +12,7 @@ import { BuildingsModule } from './buildings/buildings.module';
 import { AccesspointsModule } from './accesspoints/accesspoints.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TaskModule } from './task/task.module';
+import { InfluxModule } from './influx/influx.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { TaskModule } from './task/task.module';
     BuildingsModule,
     AccesspointsModule,
     TaskModule,
+    InfluxModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,23 +1,32 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Accesspoint } from './entities/accesspoint.entity';
 import { In, Not, Repository } from 'typeorm';
 import { BuildingsService } from '../buildings/buildings.service';
 import { ResponseAccesspointOverviewDto } from './dto/response-accesspoint.dto';
+import { InfluxService } from '../influx/influx.service';
 
 @Injectable()
 export class AccesspointsService {
   constructor(
     @InjectRepository(Accesspoint)
     private accesspointRepository: Repository<Accesspoint>,
+    @Inject(forwardRef(() => BuildingsService))
     private readonly buildingsService: BuildingsService,
+    @Inject(forwardRef(() => InfluxService))
+    private readonly influxService: InfluxService,
   ) {}
 
   findAll(): Promise<Accesspoint[]> {
     return this.accesspointRepository.find();
   }
 
-  async findOne(id: number): Promise<Accesspoint> {
+  async findOne(id: number): Promise<any> {
     const accesspoint = await this.accesspointRepository.findOne({
       where: { id },
       relations: {
@@ -34,6 +43,7 @@ export class AccesspointsService {
         },
       },
     });
+    // this.influxService.queryApLastPoint(),
     if (!accesspoint) {
       throw new NotFoundException(`Access point with id ${id} not found`);
     }
@@ -298,6 +308,12 @@ export class AccesspointsService {
         downtimeStart: true,
         jobStatus: true,
       },
+    });
+  }
+
+  existRadMac(mac: string): Promise<boolean> {
+    return this.accesspointRepository.exists({
+      where: { ethMac: mac },
     });
   }
 }
