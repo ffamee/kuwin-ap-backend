@@ -11,6 +11,7 @@ import { SectionModule } from './section/section.module';
 import { EntitiesModule } from './entities/entities.module';
 import { BuildingsModule } from './buildings/buildings.module';
 import { AccesspointsModule } from './accesspoints/accesspoints.module';
+import { StatsModule } from './stats/stats.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AccesspointsModule } from './accesspoints/accesspoints.module';
     EntitiesModule,
     BuildingsModule,
     AccesspointsModule,
+    StatsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
