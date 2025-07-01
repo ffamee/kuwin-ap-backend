@@ -8,6 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({
     origin: 'http://localhost:3000',
+    // origin: true,
     credentials: true,
   });
   app.use(cookieParser());
@@ -25,6 +26,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   await app.listen(configService.get('PORT') ?? 3001);
+  // await app.listen(configService.get('PORT') ?? 3001, '0.0.0.0');
 }
 bootstrap().catch((err) => {
   console.error('Error starting the application:', err);

@@ -11,6 +11,7 @@ services:
     depends_on:
       - database
       - influxdb
+      - redis
 
   database:
     image: mysql:8.0.42
@@ -24,6 +25,7 @@ services:
       - "3306:3306"
     volumes:
       - ./src/sql/backup.sql:/docker-entrypoint-initdb.d/backup.sql
+    restart: always
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:5.2.0
@@ -56,6 +58,13 @@ services:
       INFLUX_TOKEN: admin_token
       INFLUX_ORG: my_org
       INFLUX_BUCKET: my_bucket
-    restart: unless-stopped
+    restart: always
     # volumes:
     #   - ./influxdb:/var/lib/influxdb2
+
+  redis:
+    image: redis:8.0
+    container_name: kuwin-redis
+    ports:
+      - "6379:6379"
+    restart: always

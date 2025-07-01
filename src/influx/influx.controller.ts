@@ -14,4 +14,9 @@ export class InfluxController {
   getLastPoint() {
     return this.influxService.queryApLastPoint();
   }
+
+  @Get('ip')
+  getApIp() {
+    return this.influxService.queryIpLog();
+  }
 }

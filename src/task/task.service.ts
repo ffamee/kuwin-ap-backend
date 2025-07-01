@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Ip } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as snmp from 'net-snmp';
 import { InfluxService } from '../influx/influx.service';
@@ -12,7 +12,7 @@ interface ResolvedOid {
 
 @Injectable()
 export class TaskService {
-  private readonly oids = [`1.3.6.1.4.1.14179.2.2.1.1.3.204.127.117.89.34.32`];
+  // private readonly oids = [`1.3.6.1.4.1.14179.2.2.1.1.3.204.127.117.89.34.32`];
   private resolveSnmpOid = (oid: string): ResolvedOid => {
     const result: ResolvedOid = {
       name: null,
@@ -48,6 +48,8 @@ export class TaskService {
           result.name = 'client-2.4';
         } else if (lastSegment === '1') {
           result.name = 'client-5';
+        } else if (lastSegment === '2') {
+          result.name = 'client-6';
         }
       }
     }
@@ -82,6 +84,19 @@ export class TaskService {
       }
     }
 
+    const ipBaseOid = '1.3.6.1.4.1.14179.2.2.1.1.19.';
+    if (oid.startsWith(ipBaseOid)) {
+      const remaining = oid.substring(ipBaseOid.length); // x.x.x.x.x.x
+      const parts = remaining.split('.');
+
+      if (parts.length === 6) {
+        // ต้องมี 6 หลัก MAC
+        const oidMac = parts.join('.');
+        result.macAddress = convertOidMacToStandard(oidMac);
+        result.name = 'ip';
+      }
+    }
+
     return result;
   };
 
@@ -93,16 +108,17 @@ export class TaskService {
   }
 
   // This method is called every minute using the cron expression '* * * * *'
-  @Cron('* * * * *')
-  handleOwnExpression() {
-    console.log('Called Every Minute');
-  }
+  // @Cron('* * * * *')
+  // handleOwnExpression() {
+  //   console.log('Called Every Minute');
+  // }
 
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  // @Cron('* * * * *')
+  @Cron(CronExpression.EVERY_5_MINUTES)
   // @Interval(5000)
   async test() {
     // console log every key in snmp version type
-    console.log('Called Every 30 Seconds');
+    console.log('Called Every 5 minute');
     // const execPath = path.resolve(__dirname, '../../test_c.c');
     // const outPath = path.resolve(__dirname, '../../test.exe');
     // const testSnmp = path.resolve(__dirname, '../../test-snmp');
@@ -143,7 +159,11 @@ export class TaskService {
     const oidClient = '1.3.6.1.4.1.14179.2.2.2.1.15'; // No. of clients connected to AP
     const oidRx = '1.3.6.1.4.1.9.9.513.1.2.2.1.13'; // Rx bytes
     // const oidTx = '1.3.6.1.4.1.9.9.513.1.2.2.1.14'; // Tx bytes
-    const session = snmp.createSession('172.16.26.11', 'KUWINTEST', {
+    const oidIp = '1.3.6.1.4.1.14179.2.2.1.1.19'; // IP address of clients
+    const session = snmp.createSession('172.16.26.12', 'KUWINTEST', {
+      version: snmp.Version['2c'],
+    });
+    const session2 = snmp.createSession('172.16.26.10', 'KUWINTEST', {
       version: snmp.Version['2c'],
     });
 
@@ -189,26 +209,36 @@ export class TaskService {
             };
           }
           // display the varbind by calling the provided display function
-          display(varbind);
-          const name = this.resolveSnmpOid(varbind.oid);
-          if (!name.name || !name.macAddress) {
-            console.log(name);
-            continue; // Skip if name or macAddress is not resolved
+          // display(varbind);
+          try {
+            const name = this.resolveSnmpOid(varbind.oid);
+            if (!name.name || !name.macAddress) {
+              console.log(name);
+              continue; // Skip if name or macAddress is not resolved
+            }
+            const val =
+              name.name === 'rx' || name.name === 'tx'
+                ? ((data[name.macAddress]
+                    ? (data[name.macAddress][name.name] ?? 0)
+                    : 0) as number) + (varbind.value as number)
+                : varbind.value;
+            data[name.macAddress] = {
+              ...data[name.macAddress],
+              [name.name]: val,
+            };
+          } catch (error) {
+            console.error('Error resolving OID:', varbind.oid, error);
           }
-          const val =
-            name.name === 'rx' || name.name === 'tx'
-              ? ((data[name.macAddress][name.name] ?? 0) as number) +
-                (varbind.value as number)
-              : varbind.value;
-          data[name.macAddress] = {
-            ...data[name.macAddress],
-            [name.name]: val,
-          };
         }
       }
       return null; // คืนค่า null เพื่อให้ walk ดำเนินต่อไป
     };
 
+    const IpFeedCb = (varbinds: snmp.Varbind[]) => {
+      return feedCb(varbinds, oidIp, (varbind: snmp.Varbind) => {
+        console.log(varbind.oid + ' | ' + (varbind.value as string));
+      });
+    };
     const ClientFeedCb = (varbinds: snmp.Varbind[]) => {
       return feedCb(varbinds, oidClient, (varbind: snmp.Varbind) => {
         console.log(varbind.oid + ' | ' + (varbind.value as string));
@@ -287,6 +317,22 @@ export class TaskService {
       });
     }
 
+    function walkIp(session: snmp.Session) {
+      return new Promise((resolve, reject) => {
+        session.walk(
+          oidIp,
+          maxRepetitions,
+          IpFeedCb,
+          (error: snmp.NetSnmpError) => {
+            if (error) {
+              reject(error);
+            }
+            resolve(true);
+          },
+        );
+      });
+    }
+
     // session.walk(oid, maxRepetitions, feedCb, doneCb);
     // wait for walk to complete before closing the session
     // await new Promise((resolve) => {
@@ -306,19 +352,20 @@ export class TaskService {
     //   console.log('Client:', client);
     //   session.close();
     // });
+
     try {
-      await Promise.all([walkClient(session), walkRxTx(session)]);
+      await Promise.all([
+        walkClient(session),
+        walkRxTx(session),
+        // walkClient(session2),
+        // walkRxTx(session2),
+      ]);
       for (const mac in data) {
         if (Object.prototype.hasOwnProperty.call(data, mac)) {
           // Write each client's data to InfluxDB
-          await this.influxService.writePoint(
-            'ap_metrics',
-            data[mac],
-            {
-              mac_address: mac,
-            },
-            new Date(),
-          );
+          await this.influxService.writePoint('ap_metrics', data[mac], {
+            mac_address: mac,
+          });
         }
       }
       // console.log('Data collected:', data);
@@ -328,5 +375,67 @@ export class TaskService {
       console.error('Error during SNMP walk:', error);
       session.close();
     }
+
+    // const sessionHuawei = snmp.createSession('172.16.26.16', 'KUWINTEST', {
+    //   version: snmp.Version['2c'],
+    // });
+
+    // const oidHuawei = '1.2.156.11235.6001.60.7.2.75.2.1.1.1.2';
+    // sessionHuawei.walk(
+    //   oidHuawei,
+    //   maxRepetitions,
+    //   (varbinds: snmp.Varbind[]) => {
+    //     for (let i = 0; i < varbinds.length; i++) {
+    //       const varbind = varbinds[i];
+    //       if (snmp.isVarbindError(varbind)) {
+    //         console.error(
+    //           'Varbind Error:',
+    //           varbind.oid,
+    //           snmp.varbindError(varbind),
+    //         );
+    //       } else {
+    //         if (!varbind.oid.startsWith(oidHuawei)) {
+    //           console.log(
+    //             `Terminating Huawei walk: OID ${varbind.oid} is outside the target subtree.`,
+    //           );
+    //           return {
+    //             terminated: true,
+    //             reason: 'OID out of subtree',
+    //             lastOid: varbind.oid,
+    //           };
+    //         }
+    //         console.log(varbind.oid + ' | ' + (varbind.value as string));
+    //       }
+    //     }
+    //   },
+    //   (error: snmp.NetSnmpError) => {
+    //     if (error) {
+    //       console.error('Error during SNMP walk:', error.message);
+    //     } else {
+    //       console.log('Huawei SNMP walk completed successfully');
+    //     }
+    //     sessionHuawei.close();
+    //   },
+    // );
+
+    // try {
+    //   await walkIp(session);
+    //   await walkIp(session2);
+    //   for (const mac in data) {
+    //     if (Object.prototype.hasOwnProperty.call(data, mac)) {
+    //       // Write each client's data to InfluxDB
+    //       await this.influxService.writePoint('check_ip', data[mac], {
+    //         mac_address: mac,
+    //       });
+    //     }
+    //   }
+    //   // console.log('Data collected:', data);
+    //   // console.log('Data collected:', data);
+    //   console.log('Walk completed');
+    //   session.close();
+    // } catch (error) {
+    //   console.error('Error during SNMP walk:', error);
+    //   session.close();
+    // }
   }
 }
