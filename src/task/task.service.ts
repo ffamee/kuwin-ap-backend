@@ -1,4 +1,4 @@
-import { Injectable, Ip } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as snmp from 'net-snmp';
 import { InfluxService } from '../influx/influx.service';
@@ -102,10 +102,10 @@ export class TaskService {
 
   constructor(private readonly influxService: InfluxService) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
-  handleCron() {
-    console.log('Called Every 5 Minutes', new Date().toISOString());
-  }
+  // @Cron(CronExpression.EVERY_5_MINUTES)
+  // handleCron() {
+  //   console.log('Called Every 5 Minutes', new Date().toISOString());
+  // }
 
   // This method is called every minute using the cron expression '* * * * *'
   // @Cron('* * * * *')
@@ -114,7 +114,7 @@ export class TaskService {
   // }
 
   // @Cron('* * * * *')
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  // @Cron(CronExpression.EVERY_5_MINUTES)
   // @Interval(5000)
   async test() {
     // console log every key in snmp version type
