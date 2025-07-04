@@ -313,7 +313,48 @@ export class AccesspointsService {
 
   existRadMac(mac: string): Promise<boolean> {
     return this.accesspointRepository.exists({
-      where: { ethMac: mac },
+      where: { radMac: mac },
     });
+  }
+
+  async findIdByRadMac(mac: string) {
+    const ids = await this.accesspointRepository.findOne({
+      select: {
+        id: true,
+        building: {
+          id: true,
+          entity: {
+            id: true,
+            section: {
+              id: true,
+            },
+          },
+        },
+      },
+      where: { radMac: mac },
+      relations: {
+        building: {
+          entity: {
+            section: true,
+          },
+        },
+      },
+    });
+    // reduce {id: 1, building: {id: 1, entity: {id: 1, section: {id: 1}}}} to { sectionId: 1, entityId: 1, buildingId: 1, apId: 1 	}
+    if (!ids) {
+      // throw new NotFoundException(`Access point with radMac ${mac} not found`);
+      return {
+        sectionId: { value: -1, type: 65 },
+        entityId: { value: -1, type: 65 },
+        buildingId: { value: -1, type: 65 },
+        apId: { value: -1, type: 65 },
+      };
+    }
+    return {
+      sectionId: { value: ids.building.entity.section.id, type: 65 },
+      entityId: { value: ids.building.entity.id, type: 65 },
+      buildingId: { value: ids.building.id, type: 65 },
+      apId: { value: ids.id, type: 65 },
+    };
   }
 }

@@ -24,6 +24,7 @@ export class OidModule implements OnModuleInit, OnApplicationShutdown {
       { name: 'wlc-1', host: '172.16.26.10' },
       { name: 'wlc-2', host: '172.16.26.12' },
       { name: 'wlc-3', host: '172.16.26.16' },
+      { name: 'wlc-4', host: '172.16.26.11' },
     ];
     if (wlcs.length === 0) {
       console.warn(
@@ -60,20 +61,30 @@ export class OidModule implements OnModuleInit, OnApplicationShutdown {
       );
       this.workers.push(oidWorker);
       oidWorker.on('active', (job) => {
+        const { data } = job.data as {
+          data: string;
+        };
         console.log(
           `Worker started processing job ${job.id} in queue ${queueName}`,
           job.data,
         );
+        console.time(`${data}`);
       });
-      oidWorker.on('completed', (job, returnvalue) => {
-        console.log(
-          `Worker completed job ${job.id} in queue ${queueName} with result: ${returnvalue} at ${new Date().toLocaleTimeString()}`,
-        );
+      oidWorker.on('completed', (job) => {
+        const { data } = job.data as {
+          data: string;
+        };
+        console.log(`Worker completed job ${job.id} in queue ${queueName}`);
+        console.timeEnd(`${data}`);
       });
       oidWorker.on('failed', (job, err) => {
+        const { data } = job?.data as {
+          data: string;
+        };
         this.logger.log(
           `Worker failed job ${job?.id} in queue ${queueName} with error: ${err.message}`,
         );
+        console.timeEnd(`${data}`);
       });
     }
   }

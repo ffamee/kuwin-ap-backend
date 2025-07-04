@@ -13,6 +13,8 @@ import {
   Point,
 } from '@influxdata/influxdb-client';
 import { AccesspointsService } from '../accesspoints/accesspoints.service';
+import { Metrics } from 'src/shared/types/snmp-metrics';
+import * as snmp from 'net-snmp';
 
 @Injectable()
 export class InfluxService {
@@ -33,7 +35,7 @@ export class InfluxService {
     }
 
     const influxDB = new InfluxDB({ url, token });
-    this.writeApi = influxDB.getWriteApi(org, bucket);
+    this.writeApi = influxDB.getWriteApi(org, bucket, 'ms');
     this.queryApi = influxDB.getQueryApi(org);
   }
 
@@ -57,6 +59,46 @@ export class InfluxService {
     }
     try {
       this.writeApi.writePoint(point);
+      return await this.writeApi.flush();
+    } catch (error) {
+      console.error('Error writing point to InfluxDB:', error);
+      throw new Error('Failed to write point to InfluxDB');
+    }
+  }
+
+  async writePoints(
+    measurement: string,
+    wlc: string,
+    data: Map<string, Record<string, Metrics>>,
+  ) {
+    const points: Point[] = [];
+    for (const [mac, metrics] of data.entries()) {
+      const point = new Point(measurement)
+        .tag('ap_id', metrics.apId.value as string)
+        .tag('building_id', metrics.buildingId.value as string)
+        .tag('entity_id', metrics.entityId.value as string)
+        .tag('mac_address', mac)
+        .tag('section_id', metrics.sectionId.value as string)
+        .tag('wlc', wlc);
+
+      for (const [name, metric] of Object.entries(metrics)) {
+        if (
+          name === 'apId' ||
+          name === 'buildingId' ||
+          name === 'entityId' ||
+          name === 'sectionId'
+        )
+          continue;
+        if (metric.type === snmp.ObjectType.Counter) {
+          point.intField(name, metric.value);
+        } else {
+          point.stringField(name, metric.value);
+        }
+      }
+      points.push(point);
+    }
+    try {
+      this.writeApi.writePoints(points);
       return await this.writeApi.flush();
     } catch (error) {
       console.error('Error writing point to InfluxDB:', error);

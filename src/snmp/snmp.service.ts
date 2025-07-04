@@ -11,30 +11,28 @@ export class SnmpService {
     private readonly flowProducer: FlowProducer,
   ) {}
 
-  @Cron('* * * * *')
+  @Cron('*/5 * * * *')
   async getSnmp() {
     const wlcs = [
-      { name: 'wlc-1', host: '172.16.26.10' },
-      // { name: 'wlc-2', host: '172.16.26.12' },
+      // { name: 'wlc-1', host: '172.16.26.10' },
+      { name: 'wlc-2', host: '172.16.26.12' },
       // { name: 'wlc-3', host: '172.16.26.16' },
+      { name: 'wlc-4', host: '172.16.26.11' },
     ];
-    const oids = [
-      'oid-1',
-      'oid-2',
-      'oid-3',
-      'oid-4',
-      'oid-5',
-      'oid-6',
-      'oid-7',
-      'oid-8',
-    ];
-    // await Promise.all(
-    //   wlcs.map(async (wlc) => {
-    //     await this.wlcPollingQueue.add('wlc-polling-job', {
-    //       data: `This is a test job for SNMP polling on WLC ${wlc}`,
-    //     });
-    //   }),
-    // );
+    // const oids = [
+    //   'oid-1',
+    //   'oid-2',
+    //   'oid-3',
+    //   'oid-4',
+    //   'oid-5',
+    //   'oid-6',
+    //   'oid-7',
+    //   'oid-8',
+    // ];
+    const oidClient = '1.3.6.1.4.1.14179.2.2.2.1.15'; // No. of clients connected to AP
+    const oidRx = '1.3.6.1.4.1.9.9.513.1.2.2.1.13'; // Rx bytes
+    const oidTx = '1.3.6.1.4.1.9.9.513.1.2.2.1.14'; // Tx bytes
+    const oids = [oidClient, oidRx, oidTx];
     // await this.wlcPollingQueue.addBulk(
     //   wlcs.map((wlc) => ({
     //     name: 'wlc',
@@ -51,15 +49,13 @@ export class SnmpService {
         name: 'wlc-polling-job',
         queueName: 'wlc-polling-queue',
         data: {
-          data: `This is a test job for SNMP polling on WLC ${wlc.host}`,
+          data: `WLC polling on Host ${wlc.host}`,
           wlcName: wlc.name,
-          wlcHost: wlc.host,
         },
         children: oids.map((oid) => ({
           name: 'oid-polling-job',
           data: {
-            data: `This is a test job for SNMP polling on WLC ${wlc.host} for OID ${oid}`,
-            wlcName: wlc.name,
+            data: `SNMP polling on WLC ${wlc.host} for OID ${oid}`,
             wlcHost: wlc.host,
             oid,
           },
