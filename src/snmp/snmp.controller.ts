@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Ip, Req } from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { Request } from 'express';
 
 @Controller('snmp')
 export class SnmpController {
@@ -13,11 +14,12 @@ export class SnmpController {
     return { message: 'SNMP Controller is working!' };
   }
 
-  @Get('add')
-  async addSnmp() {
-    await this.wlcPollingQueue.add('wlc-polling-job', {
-      data: 'This is a test job for SNMP polling',
-    });
-    return { message: 'SNMP job added to the queue!' };
+  @Get('connected')
+  findConnected(@Ip() ip: string, @Req() req: Request) {
+    return {
+      ip,
+      socket: req.socket.remoteAddress,
+      message: `Your IP is ${req.ip} ${req.get('X-Forwarded-For') ? `and forwarded IP is ${req.get('X-Forwarded-For')}` : ''}`,
+    };
   }
 }

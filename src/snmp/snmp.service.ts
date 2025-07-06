@@ -11,7 +11,7 @@ export class SnmpService {
     private readonly flowProducer: FlowProducer,
   ) {}
 
-  @Cron('*/5 * * * *')
+  // @Cron('*/5 * * * *')
   async getSnmp() {
     const wlcs = [
       // { name: 'wlc-1', host: '172.16.26.10' },
