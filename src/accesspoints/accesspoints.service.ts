@@ -1,16 +1,25 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Accesspoint } from './entities/accesspoint.entity';
 import { In, Not, Repository } from 'typeorm';
 import { BuildingsService } from '../buildings/buildings.service';
 import { ResponseAccesspointOverviewDto } from './dto/response-accesspoint.dto';
+import { InfluxService } from '../influx/influx.service';
 
 @Injectable()
 export class AccesspointsService {
   constructor(
     @InjectRepository(Accesspoint)
     private accesspointRepository: Repository<Accesspoint>,
+    @Inject(forwardRef(() => BuildingsService))
     private readonly buildingsService: BuildingsService,
+    @Inject(forwardRef(() => InfluxService))
+    private readonly influxService: InfluxService,
   ) {}
 
   findAll(): Promise<Accesspoint[]> {
@@ -45,7 +54,7 @@ export class AccesspointsService {
     });
   }
 
-  async findOne(id: number): Promise<Accesspoint> {
+  async findOne(id: number): Promise<any> {
     const accesspoint = await this.accesspointRepository.findOne({
       where: { id },
       relations: {
@@ -62,6 +71,7 @@ export class AccesspointsService {
         },
       },
     });
+    // this.influxService.queryApLastPoint(),
     if (!accesspoint) {
       throw new NotFoundException(`Access point with id ${id} not found`);
     }
@@ -343,5 +353,52 @@ export class AccesspointsService {
         },
       },
     });
+  }
+
+  existRadMac(mac: string): Promise<boolean> {
+    return this.accesspointRepository.exists({
+      where: { radMac: mac },
+    });
+  }
+
+  async findIdByRadMac(mac: string) {
+    const ids = await this.accesspointRepository.findOne({
+      select: {
+        id: true,
+        building: {
+          id: true,
+          entity: {
+            id: true,
+            section: {
+              id: true,
+            },
+          },
+        },
+      },
+      where: { radMac: mac },
+      relations: {
+        building: {
+          entity: {
+            section: true,
+          },
+        },
+      },
+    });
+    // reduce {id: 1, building: {id: 1, entity: {id: 1, section: {id: 1}}}} to { sectionId: 1, entityId: 1, buildingId: 1, apId: 1 	}
+    if (!ids) {
+      // throw new NotFoundException(`Access point with radMac ${mac} not found`);
+      return {
+        sectionId: { value: -1, type: 65 },
+        entityId: { value: -1, type: 65 },
+        buildingId: { value: -1, type: 65 },
+        apId: { value: -1, type: 65 },
+      };
+    }
+    return {
+      sectionId: { value: ids.building.entity.section.id, type: 65 },
+      entityId: { value: ids.building.entity.id, type: 65 },
+      buildingId: { value: ids.building.id, type: 65 },
+      apId: { value: ids.id, type: 65 },
+    };
   }
 }

@@ -10,6 +10,8 @@ services:
       - ./src:/app/src
     depends_on:
       - database
+      - influxdb
+      - redis
 
   database:
     image: mysql:8.0.42
@@ -23,6 +25,7 @@ services:
       - "3306:3306"
     volumes:
       - ./src/sql/backup.sql:/docker-entrypoint-initdb.d/backup.sql
+    restart: always
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:5.2.0
@@ -37,4 +40,31 @@ services:
       # PMA_PASSWORD: password
     ports:
       - "8080:80"
+    restart: always
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: kuwin-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: password
+      DOCKER_INFLUXDB_INIT_ORG: my_org
+      DOCKER_INFLUXDB_INIT_BUCKET: my_bucket
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: admin_token
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: admin_token
+      INFLUX_ORG: my_org
+      INFLUX_BUCKET: my_bucket
+    restart: always
+    # volumes:
+    #   - ./influxdb:/var/lib/influxdb2
+
+  redis:
+    image: redis:8.0
+    container_name: kuwin-redis
+    ports:
+      - "6379:6379"
     restart: always
