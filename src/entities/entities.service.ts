@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { SectionService } from '../section/section.service';
 import { AccesspointsService } from '../accesspoints/accesspoints.service';
 import { BuildingsService } from 'src/buildings/buildings.service';
+import { CreateEntityDto } from './dto/create-entity.dto';
 
 @Injectable()
 export class EntitiesService {
@@ -134,5 +135,28 @@ export class EntitiesService {
       buildings,
       accesspoints,
     };
+  }
+
+  async create(
+    createEntityDto: CreateEntityDto,
+    file: Express.Multer.File,
+  ): Promise<Entity> {
+    if (!(await this.sectionService.exist(createEntityDto.sectionId))) {
+      throw new NotFoundException(
+        `Section with ID ${createEntityDto.sectionId} not found`,
+      );
+    }
+    const entity = this.entityRepository.create({
+      name: createEntityDto.name,
+      // timestamp: new Date()
+      timestamp: new Date().toISOString(),
+      url: 'tmp',
+      coordinate: 'tmp',
+      style: 'tmp',
+      pic: file.filename,
+      section: { id: createEntityDto.sectionId },
+    });
+
+    return this.entityRepository.save(entity);
   }
 }

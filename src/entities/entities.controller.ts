@@ -1,4 +1,13 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { EntitiesService } from './entities.service';
 import {
   ApiNotFoundResponse,
@@ -7,16 +16,20 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { CreateEntityDto } from './dto/create-entity.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { ConfigService } from '@nestjs/config';
+import { join } from 'path';
 
 @ApiTags('Entity')
 @Controller('entities')
 export class EntitiesController {
-  constructor(private readonly entitiesService: EntitiesService) {}
+  constructor(
+    private readonly entitiesService: EntitiesService,
+    private readonly configService: ConfigService,
+  ) {}
 
-  // @Post()
-  // create(@Body() createEntityDto: CreateEntityDto) {
-  //   return this.entitiesService.create(createEntityDto);
-  // }
   @ApiOperation({
     summary: 'Get all buildings in entities with their names',
   })
@@ -199,5 +212,41 @@ export class EntitiesController {
   @Get()
   findAll() {
     return this.entitiesService.findAll();
+  }
+
+  @Post()
+  @UseInterceptors(
+    FileInterceptor('pic', {
+      storage: diskStorage({
+        filename: (req, file, cb) => {
+          const ext = file.originalname.split('.').pop();
+          const filename = `${Date.now()}.${ext}`;
+          cb(null, filename);
+        },
+        destination: join(
+          process.cwd(),
+          process.env.UPLOAD_DIR || 'uploads',
+          'entities',
+        ),
+      }),
+      fileFilter(req, file, callback) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException(
+              'File type not matched with jpeg, png, or gif',
+            ),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  create(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() createEntityDto: CreateEntityDto,
+  ) {
+    return this.entitiesService.create(createEntityDto, file);
   }
 }

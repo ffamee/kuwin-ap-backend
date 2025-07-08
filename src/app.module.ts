@@ -17,6 +17,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { SnmpModule } from './snmp/snmp.module';
 import { OidModule } from './oid/oid.module';
 import { StatsModule } from './stats/stats.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   imports: [
@@ -57,6 +59,20 @@ import { StatsModule } from './stats/stats.module';
       extraOptions: {
         manualRegistration: true, // Allows manual registration of queues
       },
+    }),
+    ServeStaticModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      // let frontend find static files with http://localhost:3000/uploads
+      useFactory: (configService: ConfigService) => [
+        {
+          rootPath: join(
+            process.cwd(),
+            configService.get<string>('UPLOAD_DIR', 'uploads'),
+          ),
+          serveRoot: '/uploads',
+        },
+      ],
     }),
     ZonesModule,
     UsersModule,
