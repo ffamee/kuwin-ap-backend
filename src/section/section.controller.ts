@@ -198,6 +198,9 @@ export class SectionController {
     description:
       'Section moved entities to default section and deleted successfully',
   })
+  @ApiNotFoundResponse({
+    description: 'Section not found',
+  })
   @Delete('move/:id')
   moveAndDelete(@Param('id') id: string) {
     return this.sectionService.moveAndDelete(+id);

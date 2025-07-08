@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   Query,
   UploadedFile,
@@ -10,17 +12,21 @@ import {
 } from '@nestjs/common';
 import { EntitiesService } from './entities.service';
 import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiConflictResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
+  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { ConfigService } from '@nestjs/config';
-import { join } from 'path';
+import { UpdateEntityDto } from './dto/update-entity.dto';
 
 @ApiTags('Entity')
 @Controller('entities')
@@ -214,22 +220,55 @@ export class EntitiesController {
     return this.entitiesService.findAll();
   }
 
+  @ApiOperation({
+    summary: 'Create a new entity',
+  })
+  @ApiBody({
+    description: 'Create a new entity with name and section',
+    type: CreateEntityDto,
+    examples: {
+      createEntity: {
+        value: {
+          name: 'New Entity',
+          section: 1, // 1 for faculty, 2 for organization, 3 for dormitory
+        },
+      },
+    },
+  })
+  @ApiOkResponse({
+    description: 'Entity created successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Section with the given ID not found',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large, maximum size is 10MB',
+  })
+  @ApiBadRequestResponse({
+    description: 'File type not matched with jpeg, png, or gif',
+  })
   @Post()
   @UseInterceptors(
     FileInterceptor('pic', {
-      storage: diskStorage({
-        filename: (req, file, cb) => {
-          const ext = file.originalname.split('.').pop();
-          const filename = `${Date.now()}.${ext}`;
-          cb(null, filename);
-        },
-        destination: join(
-          process.cwd(),
-          process.env.UPLOAD_DIR || 'uploads',
-          'entities',
-        ),
-      }),
+      // storage: diskStorge({
+      //   filename: (req, file, cb) => {
+      //     const ext = file.originalname.split('.').pop();
+      //     const filename = `${Date.now()}.${ext}`;
+      //     cb(null, filename);
+      //   },
+      //   destination: join(
+      //     process.cwd(),
+      //     process.env.UPLOAD_DIR || 'uploads',
+      //     'entities',
+      //   ),
+      // }),
+      storage: memoryStorage(),
       fileFilter(req, file, callback) {
+        // allow not uploading file
+        if (!file) {
+          return callback(null, true);
+        }
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
         if (!allowedTypes.includes(file.mimetype)) {
           return callback(
@@ -244,9 +283,97 @@ export class EntitiesController {
     }),
   )
   create(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Body() createEntityDto: CreateEntityDto,
   ) {
     return this.entitiesService.create(createEntityDto, file);
+  }
+
+  @ApiOperation({
+    summary: 'Delete an entity by ID',
+  })
+  @ApiOkResponse({
+    description: 'Entity deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Entity with ID 1 deleted successfully',
+        },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Entity with the given ID not found',
+  })
+  @ApiConflictResponse({
+    description:
+      'Entity with the given ID has associated buildings and cannot be deleted',
+  })
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.entitiesService.remove(+id);
+  }
+
+  @ApiOperation({
+    summary: 'Move entity to default entity and delete it',
+  })
+  @ApiOkResponse({
+    description:
+      'Entity moved buildings to default entity and deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example:
+            'Entity with ID 1 moved buildings to default entity and deleted successfully',
+        },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Entity with the given ID not found',
+  })
+  @Delete('move/:id')
+  moveAndDelete(@Param('id') id: string) {
+    return this.entitiesService.moveAndDelete(+id);
+  }
+
+  @Post('edit/:id')
+  @UseInterceptors(
+    FileInterceptor('pic', {
+      storage: memoryStorage(),
+      fileFilter(req, file, callback) {
+        // allow not uploading file
+        if (!file) {
+          return callback(null, true);
+        }
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException(
+              'File type not matched with jpeg, png, or gif',
+            ),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  edit(
+    @Param('id') id: string,
+    @Body() updateEntityDto: UpdateEntityDto,
+    @Query('confirm') confirm: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    return this.entitiesService.edit(
+      +id,
+      updateEntityDto,
+      confirm === 'true',
+      file,
+    );
   }
 }
