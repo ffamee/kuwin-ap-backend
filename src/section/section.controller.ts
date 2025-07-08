@@ -1,14 +1,24 @@
-import { Controller, Get, Post, Body, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Delete,
+  Param,
+} from '@nestjs/common';
 import { SectionService } from './section.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import {
   ApiBody,
+  ApiConflictResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { UpdateSectionDto } from './dto/update-section.dto';
 
 @ApiTags('Section')
 @Controller('section')
@@ -162,5 +172,70 @@ export class SectionController {
   @Post()
   create(@Body() createSectionDto: CreateSectionDto) {
     return this.sectionService.create(createSectionDto);
+  }
+
+  @ApiOperation({
+    summary: 'Delete a section by id',
+  })
+  @ApiOkResponse({
+    description: 'Section deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Section not found',
+  })
+  @ApiConflictResponse({
+    description: 'Section cannot be deleted because it has associated entities',
+  })
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.sectionService.remove(+id);
+  }
+
+  @ApiOperation({
+    summary: 'Move entities to deleted section and delete section by id',
+  })
+  @ApiOkResponse({
+    description:
+      'Section moved entities to default section and deleted successfully',
+  })
+  @Delete('move/:id')
+  moveAndDelete(@Param('id') id: string) {
+    return this.sectionService.moveAndDelete(+id);
+  }
+
+  @ApiOperation({
+    summary: 'Edit a section by id',
+  })
+  @ApiBody({
+    description: 'Section name',
+    type: UpdateSectionDto,
+    examples: {
+      Rename: {
+        summary: 'Update Section',
+        value: {
+          name: 'new section name',
+        },
+      },
+    },
+  })
+  @ApiOkResponse({
+    description: 'return updated section',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        secType: { type: 'string', example: 'Updated Section' },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Section not found',
+  })
+  @ApiConflictResponse({
+    description: 'Section with name already exists',
+  })
+  @Post('edit/:id')
+  edit(@Param('id') id: string, @Body() UpdateSectionDto: UpdateSectionDto) {
+    return this.sectionService.edit(+id, UpdateSectionDto);
   }
 }

@@ -1,19 +1,24 @@
 import {
+  ConflictException,
   forwardRef,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { Section } from './entities/section.entity';
-import { Not, Repository } from 'typeorm';
+import { DataSource, Not, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { AccesspointsService } from '../accesspoints/accesspoints.service';
 import { EntitiesService } from '../entities/entities.service';
+import { Entity } from '../entities/entities/entity.entity';
+import { UpdateSectionDto } from './dto/update-section.dto';
 
 @Injectable()
 export class SectionService {
   constructor(
+    private dataSource: DataSource,
     @InjectRepository(Section)
     private sectionRepository: Repository<Section>,
     @Inject(forwardRef(() => AccesspointsService))
@@ -26,12 +31,119 @@ export class SectionService {
     return this.sectionRepository.find({ where: { id: Not(4) } });
   }
 
-  create(createSectionDto: CreateSectionDto): Promise<Section> {
+  async create(createSectionDto: CreateSectionDto): Promise<Section> {
+    if (
+      await this.sectionRepository.exists({
+        where: { name: createSectionDto.name },
+      })
+    ) {
+      throw new ConflictException(
+        `Section with name ${createSectionDto.name} already exists`,
+      );
+    }
     return this.sectionRepository.save(createSectionDto);
   }
 
-  exist(section: string): Promise<boolean> {
-    return this.sectionRepository.exists({ where: { name: section } });
+  async remove(id: number) {
+    const section = await this.sectionRepository.findOne({
+      where: { id },
+      relations: ['entities'],
+    });
+    if (!section) {
+      throw new NotFoundException(`Section with id ${id} not found`);
+    }
+    if (section.entities.length > 0) {
+      throw new ConflictException(
+        `Section with id ${id} cannot be deleted because it has associated entities`,
+      );
+    }
+    return this.sectionRepository.delete(id).then(() => {
+      return {
+        message: `Section with id ${id} deleted successfully`,
+      };
+    });
+  }
+
+  async moveAndDelete(id: number) {
+    // use transaction to ensure atomicity to move entities to default section (id: 8) and delete section
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const section = await manager.findOne(Section, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (section) {
+          await manager.update(
+            Entity,
+            { section: { id } },
+            { section: { id: 8 } },
+          );
+          await manager.delete(Section, { id });
+          return {
+            message: `Section with id ${id} moved entities to default section and deleted successfully`,
+          };
+        } else {
+          throw new NotFoundException(`Section with id ${id} not found`);
+        }
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error; // rethrow NotFoundException
+      }
+      throw new InternalServerErrorException(
+        `Section with id ${id} cannot be deleted because ${error}`,
+      );
+    }
+
+    // other ways to implement lock writing
+    // await manager
+    // 	.createQueryBuilder(Section, 'section')
+    // 	.setLock('pessimistic_write')
+    // 	.where('section.id = :id', { id })
+    // 	.getOne();
+
+    // Solution by Query Runner
+    // const queryRunner = this.dataSource.createQueryRunner();
+    // await queryRunner.connect();
+    // const exists = await queryRunner.manager.exists(Section, { where: { id } });
+    // if (!exists) {
+    //   throw new NotFoundException(`Section with id ${id} not found`);
+    // }
+    // await queryRunner.startTransaction();
+
+    // try {
+    //   await queryRunner.manager.update(
+    //     Entity,
+    //     { section: { id } },
+    //     { section: { id: 8 } },
+    //   );
+    //   await queryRunner.manager.delete(Section, { id });
+    // } catch (error) {
+    //   await queryRunner.rollbackTransaction();
+    //   throw error;
+    // } finally {
+    //   await queryRunner.release();
+    // }
+  }
+
+  async edit(id: number, UpdateSectionDto: UpdateSectionDto) {
+    if (!(await this.sectionRepository.exists({ where: { id } }))) {
+      throw new NotFoundException(`Section with id ${id} not found`);
+    }
+    if (
+      await this.sectionRepository.exists({
+        where: { name: UpdateSectionDto.name, id: Not(id) },
+      })
+    ) {
+      throw new ConflictException(
+        `Section with name ${UpdateSectionDto.name} already exists`,
+      );
+    }
+    return this.sectionRepository.update(id, UpdateSectionDto);
+  }
+
+  exist(sectionId: number): Promise<boolean> {
+    return this.sectionRepository.exists({ where: { id: sectionId } });
   }
 
   async findAllName(): Promise<Record<string, Section>> {
