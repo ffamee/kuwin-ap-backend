@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtPayload } from 'src/shared/types/auth-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -118,26 +118,22 @@ export class UsersService {
     });
   }
 
-  async editUser(id: string, user: UpdateUserDto): Promise<User> {
+  async editUser(id: string, user: UpdateUserDto): Promise<User | null> {
     if (!(await this.userRepository.exists({ where: { id } }))) {
       throw new NotFoundException('User not found');
     }
     if (
       await this.userRepository.exists({
-        where: { username: user.username },
+        where: { username: user.username, id: Not(id) },
       })
     ) {
       throw new ConflictException('Username already exists');
     }
     if (user.password) {
       user.password = await bcrypt.hash(user.password, 10);
-    } else {
-      const existingUser = await this.userRepository.findOne({ where: { id } });
-      user.password = existingUser?.password; // Keep the existing password if not provided
     }
-    return await this.userRepository.save({
-      ...user,
-      id,
+    return await this.userRepository.update(id, user).then(() => {
+      return this.userRepository.findOne({ where: { id } });
     });
   }
 }
