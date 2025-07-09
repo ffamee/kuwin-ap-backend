@@ -21,7 +21,7 @@ import { join } from 'path';
         dest: join(
           process.cwd(),
           configService.get<string>('UPLOAD_DIR', 'uploads'),
-          'entities',
+          'buildings',
         ),
         limits: {
           fileSize: 10 * 1024 * 1024, // 10 MB

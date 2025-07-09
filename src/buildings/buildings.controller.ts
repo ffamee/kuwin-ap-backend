@@ -1,4 +1,15 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { BuildingsService } from './buildings.service';
 import {
   ApiNotFoundResponse,
@@ -8,11 +19,19 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Building } from './entities/building.entity';
+import { ConfigService } from '@nestjs/config';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { CreateBuildingDto } from './dto/create-building.dto';
+import { UpdateBuildingDto } from './dto/update-building.dto';
 
 @ApiTags('Building')
 @Controller('buildings')
 export class BuildingsController {
-  constructor(private readonly buildingsService: BuildingsService) {}
+  constructor(
+    private readonly buildingsService: BuildingsService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @ApiOperation({ summary: 'Get building overview by buildingID' })
   @ApiQuery({
@@ -83,5 +102,80 @@ export class BuildingsController {
   })
   findAll() {
     return this.buildingsService.findAll();
+  }
+
+  @Post()
+  @UseInterceptors(
+    FileInterceptor('pic', {
+      storage: memoryStorage(),
+      fileFilter(req, file, callback) {
+        // allow not uploading file
+        if (!file) {
+          return callback(null, true);
+        }
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException(
+              'File type not matched with jpeg, png, or gif',
+            ),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  create(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() createBuildingDto: CreateBuildingDto,
+  ) {
+    return this.buildingsService.create(createBuildingDto, file);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.buildingsService.remove(+id);
+  }
+
+  @Delete('move/:id')
+  moveAndDelete(@Param('id') id: string) {
+    return this.buildingsService.moveAndDelete(+id);
+  }
+
+  @Post('edit/:id')
+  @UseInterceptors(
+    FileInterceptor('pic', {
+      storage: memoryStorage(),
+      fileFilter(req, file, callback) {
+        // allow not uploading file
+        if (!file) {
+          return callback(null, true);
+        }
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException(
+              'File type not matched with jpeg, png, or gif',
+            ),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  edit(
+    @Param('id') id: string,
+    @Body() updateBuildingDto: UpdateBuildingDto,
+    @Query('confirm') confirm: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    return this.buildingsService.edit(
+      +id,
+      updateBuildingDto,
+      confirm === 'true',
+      file,
+    );
   }
 }

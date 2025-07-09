@@ -218,7 +218,7 @@ export class EntitiesService {
         throw error; // rethrow NotFoundException
       }
       throw new InternalServerErrorException(
-        `Section with id ${id} cannot be deleted because ${error}`,
+        `Entity with id ${id} cannot be deleted because ${error}`,
       );
     }
   }
@@ -284,6 +284,9 @@ export class EntitiesService {
                 pic: filename,
                 section: { id: sectionId },
               });
+              return {
+                message: `Entity with ID ${id} updated successfully.`,
+              };
             } else {
               throw new NotFoundException(`Entity with ID ${id} not found`);
             }

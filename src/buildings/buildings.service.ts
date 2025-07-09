@@ -1,18 +1,28 @@
 import {
+  ConflictException,
   forwardRef,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Not, Repository } from 'typeorm';
 import { Building } from './entities/building.entity';
 import { EntitiesService } from '../entities/entities.service';
 import { AccesspointsService } from '../accesspoints/accesspoints.service';
+import { CreateBuildingDto } from './dto/create-building.dto';
+import { UpdateBuildingDto } from './dto/update-building.dto';
+import { ConfigService } from '@nestjs/config';
+import { deleteFile, saveFile } from 'src/shared/utils/file-system';
+import { Accesspoint } from 'src/accesspoints/entities/accesspoint.entity';
+import { Entity } from 'src/entities/entities/entity.entity';
 
 @Injectable()
 export class BuildingsService {
   constructor(
+    private dataSource: DataSource,
+    private readonly configService: ConfigService,
     @InjectRepository(Building)
     private buildingRepository: Repository<Building>,
     @Inject(forwardRef(() => EntitiesService))
@@ -65,7 +75,22 @@ export class BuildingsService {
         id: buildingId,
         entity: { id: entityId, section: { id: sectionId } },
       },
-      relations: ['accesspoints'],
+      relations: ['accesspoints', 'entity'],
+      select: {
+        entity: { name: true, id: true },
+        accesspoints: {
+          id: true,
+          name: true,
+          status: true,
+          ip: true,
+          location: true,
+          problem: true,
+          numberClient: true,
+          numberClient_2: true,
+          wlcActive: true,
+          wlc: true,
+        },
+      },
     });
     if (!building) {
       throw new NotFoundException(`Building with id ${buildingId} not found`);
@@ -84,6 +109,173 @@ export class BuildingsService {
       apDown,
       totalUser,
       accesspoints: building.accesspoints,
+      entity: building.entity,
     };
+  }
+
+  async create(
+    createBuildingDto: CreateBuildingDto,
+    file: Express.Multer.File | undefined,
+  ): Promise<Building> {
+    if (!(await this.entityService.exist(createBuildingDto.entityId))) {
+      throw new NotFoundException(
+        `Entity with ID ${createBuildingDto.entityId} not found`,
+      );
+    }
+    const filename = file
+      ? await saveFile(this.configService, file, 'buildings')
+      : 'default.png';
+    const building = this.buildingRepository.create({
+      name: createBuildingDto.name,
+      comment: createBuildingDto.comment,
+      pic: filename,
+      entity: { id: createBuildingDto.entityId },
+    });
+    return this.buildingRepository.save(building);
+  }
+
+  async remove(id: number) {
+    const building = await this.buildingRepository.findOne({
+      where: { id },
+      relations: ['accesspoints'],
+    });
+    if (!building) {
+      throw new NotFoundException(`Building with ID ${id} not found`);
+    }
+    if (building.accesspoints.length > 0) {
+      throw new ConflictException(
+        `Cannot delete building with ID ${id} because it has associated access points.`,
+      );
+    }
+    await deleteFile(building.pic ?? 'default.png');
+    return this.buildingRepository.delete(id).then(() => {
+      return { message: `Building with ID ${id} deleted successfully` };
+    });
+  }
+
+  async moveAndDelete(id: number) {
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const building = await manager.findOne(Building, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (building) {
+          await deleteFile(building.pic ?? 'default.png');
+          await manager.update(
+            Accesspoint,
+            { building: { id } },
+            { building: { id: 290 } },
+          );
+          await manager.delete(Building, { id });
+          return {
+            message: `Building with ID ${id} moved and deleted successfully`,
+          };
+        } else {
+          throw new NotFoundException(`Building with ID ${id} not found`);
+        }
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Building with id ${id} cannot be deleted because ${error}`,
+      );
+    }
+  }
+
+  async edit(
+    id: number,
+    updateBuildingDto: UpdateBuildingDto,
+    confirm: boolean,
+    file: Express.Multer.File | undefined,
+  ) {
+    const building = await this.buildingRepository.findOne({
+      where: { id },
+      relations: ['entity'],
+    });
+    if (!building) {
+      throw new NotFoundException(`Building with ID ${id} not found`);
+    }
+    if (
+      updateBuildingDto.name &&
+      (await this.buildingRepository.exist({
+        where: { name: updateBuildingDto.name, id: Not(id) },
+      }))
+    ) {
+      throw new ConflictException(
+        `Building with name ${updateBuildingDto.name} already exists`,
+      );
+    }
+    if (
+      updateBuildingDto.entityId &&
+      updateBuildingDto.entityId !== building.entity.id
+    ) {
+      if (!confirm) {
+        throw new ConflictException(
+          `Building with ID ${id} cannot be moved to another entity without confirmation`,
+        );
+      } else {
+        try {
+          await this.dataSource.transaction(async (manager) => {
+            const building = await manager.findOne(Building, {
+              where: { id },
+              lock: { mode: 'pessimistic_write' },
+            });
+            if (building) {
+              if (
+                !(await manager.exists(Entity, {
+                  where: { id: updateBuildingDto.entityId },
+                }))
+              ) {
+                throw new NotFoundException(
+                  `Entity with ID ${updateBuildingDto.entityId} not found`,
+                );
+              }
+              const { entityId, ...rest } = updateBuildingDto;
+              let filename = building.pic;
+              if (file) {
+                await deleteFile(building.pic ?? 'default.png');
+                filename = await saveFile(
+                  this.configService,
+                  file,
+                  'buildings',
+                );
+              }
+              await manager.update(Building, id, {
+                ...rest,
+                pic: filename,
+                entity: { id: entityId },
+              });
+              return {
+                message: `Building with ID ${id} moved to entity ${updateBuildingDto.entityId} successfully`,
+              };
+            }
+          });
+        } catch (error) {
+          if (error instanceof NotFoundException) {
+            throw error;
+          }
+          throw new InternalServerErrorException(
+            `Failed to update building with ID ${id} with ${error}`,
+          );
+        }
+      }
+    } else {
+      let filename = building.pic;
+      if (file) {
+        await deleteFile(building.pic ?? 'default.png');
+        filename = await saveFile(this.configService, file, 'buildings');
+      }
+      return this.buildingRepository
+        .update(id, {
+          ...updateBuildingDto,
+          pic: filename,
+        })
+        .then(() => {
+          return { message: `Building with ID ${id} updated successfully.` };
+        });
+    }
   }
 }
