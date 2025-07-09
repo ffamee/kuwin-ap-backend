@@ -17,8 +17,7 @@ import { Building } from '../buildings/entities/building.entity';
 import { UpdateEntityDto } from './dto/update-entity.dto';
 import { Section } from 'src/section/entities/section.entity';
 import { ConfigService } from '@nestjs/config';
-import * as fs from 'fs';
-import { join } from 'path';
+import { deleteFile, saveFile } from 'src/shared/utils/file-system';
 
 @Injectable()
 export class EntitiesService {
@@ -147,54 +146,6 @@ export class EntitiesService {
     };
   }
 
-  async saveFile(file: Express.Multer.File) {
-    const uploadDir = join(
-      process.cwd(),
-      this.configService.get<string>('UPLOAD_DIR', 'uploads'),
-      'entities',
-    );
-    try {
-      await fs.promises.mkdir(uploadDir, { recursive: true });
-    } catch (error) {
-      throw new InternalServerErrorException(
-        `Failed to create upload directory with error: ${error}`,
-      );
-    }
-    try {
-      const ext = file.originalname.split('.').pop();
-      const filename = `${Date.now()}.${ext}`;
-      const filePath = join(uploadDir, filename);
-      await fs.promises.writeFile(filePath, file.buffer);
-      return `uploads/entities/` + filename;
-    } catch (error) {
-      throw new InternalServerErrorException(
-        `Failed to save file with error: ${error}`,
-      );
-    }
-  }
-
-  async deleteFile(filename: string) {
-    if (!filename || filename === 'default.png') {
-      return; // No file to delete or default file, skip deletion
-    }
-    try {
-      const filePath = join(process.cwd(), filename);
-      await fs.promises.access(filePath, fs.constants.F_OK);
-      await fs.promises.unlink(filePath);
-      return;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        // File does not exist, no action needed
-        throw new NotFoundException(
-          `File ${filename} not found, cannot delete`,
-        );
-      }
-      throw new InternalServerErrorException(
-        `Failed to delete file with error: ${error}`,
-      );
-    }
-  }
-
   async create(
     createEntityDto: CreateEntityDto,
     file: Express.Multer.File | undefined,
@@ -204,7 +155,9 @@ export class EntitiesService {
         `Section with ID ${createEntityDto.sectionId} not found`,
       );
     }
-    const filename = file ? await this.saveFile(file) : 'default.png';
+    const filename = file
+      ? await saveFile(this.configService, file, 'entities')
+      : 'default.png';
     const entity = this.entityRepository.create({
       name: createEntityDto.name,
       // timestamp: new Date()
@@ -232,7 +185,7 @@ export class EntitiesService {
         `Entity with ID ${id} has associated buildings and cannot be deleted`,
       );
     }
-    await this.deleteFile(entity.pic);
+    await deleteFile(entity.pic);
     return await this.entityRepository.delete(id).then(() => {
       return { message: `Entity with ID ${id} deleted successfully` };
     });
@@ -246,7 +199,7 @@ export class EntitiesService {
           lock: { mode: 'pessimistic_write' },
         });
         if (entity) {
-          await this.deleteFile(entity.pic);
+          await deleteFile(entity.pic);
           await manager.update(
             Building,
             { entity: { id } },
@@ -323,8 +276,8 @@ export class EntitiesService {
               const { sectionId, ...rest } = updateEntityDto;
               let filename = entity.pic;
               if (file) {
-                await this.deleteFile(entity.pic);
-                filename = await this.saveFile(file);
+                await deleteFile(entity.pic);
+                filename = await saveFile(this.configService, file, 'entities');
               }
               await manager.update(Entity, id, {
                 ...rest,
@@ -347,8 +300,8 @@ export class EntitiesService {
     } else {
       let filename = entity.pic;
       if (file) {
-        await this.deleteFile(entity.pic);
-        filename = await this.saveFile(file);
+        await deleteFile(entity.pic);
+        filename = await saveFile(this.configService, file, 'entities');
       }
       return this.entityRepository
         .update(id, { ...updateEntityDto, pic: filename })
