@@ -25,16 +25,12 @@ import {
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { ConfigService } from '@nestjs/config';
 import { UpdateEntityDto } from './dto/update-entity.dto';
 
 @ApiTags('Entity')
 @Controller('entities')
 export class EntitiesController {
-  constructor(
-    private readonly entitiesService: EntitiesService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly entitiesService: EntitiesService) {}
 
   @ApiOperation({
     summary: 'Get all buildings in entities with their names',
@@ -341,6 +337,30 @@ export class EntitiesController {
     return this.entitiesService.moveAndDelete(+id);
   }
 
+  @ApiOperation({
+    summary: 'Edit an entity by ID',
+  })
+  @ApiBody({
+    description: 'Update entity details',
+    type: UpdateEntityDto,
+  })
+  @ApiOkResponse({
+    description: 'Entity updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Entity with the given ID not found',
+  })
+  @ApiConflictResponse({
+    description:
+      'Entity with the given ID has associated buildings and cannot be updated',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large, maximum size is 10MB',
+  })
+  @ApiBadRequestResponse({
+    description: 'File type not matched with jpeg, png, or gif',
+  })
   @Post('edit/:id')
   @UseInterceptors(
     FileInterceptor('pic', {
