@@ -14,11 +14,13 @@ import { AccesspointsService } from '../accesspoints/accesspoints.service';
 import { EntitiesService } from '../entities/entities.service';
 import { Entity } from '../entities/entities/entity.entity';
 import { UpdateSectionDto } from './dto/update-section.dto';
+import { InfluxService } from 'src/influx/influx.service';
 
 @Injectable()
 export class SectionService {
   constructor(
     private dataSource: DataSource,
+    private readonly influxService: InfluxService,
     @InjectRepository(Section)
     private sectionRepository: Repository<Section>,
     @Inject(forwardRef(() => AccesspointsService))
@@ -178,14 +180,40 @@ export class SectionService {
     if (!section) {
       throw new NotFoundException(`SectionId ${sectionId} not found`);
     }
-    const [apAll, apMaintain, apDown, totalUser, entities] = await Promise.all([
-      this.accesspointsService.countAPInSection(sectionId),
-      this.accesspointsService.countAPMaintainInSection(sectionId),
-      this.accesspointsService.countAPDownInSection(sectionId),
-      this.accesspointsService.sumAllClientInSection(sectionId),
-      this.entitiesService.findEntitiesWithApCount(sectionId),
-    ]);
+    const [apAll, apMaintain, apDown, totalUser, entities, dynamic] =
+      await Promise.all([
+        this.accesspointsService.countAPInSection(sectionId),
+        this.accesspointsService.countAPMaintainInSection(sectionId),
+        this.accesspointsService.countAPDownInSection(sectionId),
+        this.accesspointsService.sumAllClientInSection(sectionId),
+        this.entitiesService.findEntitiesWithApCount(sectionId),
+        this.influxService.findOneSection(sectionId),
+      ]);
     // table => name, ap in entity, ap maintain in entity, ap down in entity, total user in entity, wlc in entity
+    const data = dynamic as {
+      'client-2.4': number;
+      'client-5': number;
+      'client-6': number;
+      rx: number;
+      tx: number;
+    }[];
+    const defaulttt = data.reduce(
+      (acc, cur) => {
+        acc['client-2.4'] += cur['client-2.4'];
+        acc['client-5'] += cur['client-5'];
+        acc['client-6'] += cur['client-6'];
+        acc.rx += cur.rx;
+        acc.tx += cur.tx;
+        return acc;
+      },
+      {
+        'client-2.4': 0,
+        'client-5': 0,
+        'client-6': 0,
+        rx: 0,
+        tx: 0,
+      },
+    );
     return {
       id: section.id,
       name: section.name,
@@ -194,6 +222,8 @@ export class SectionService {
       apDown,
       totalUser,
       entities,
+      dynamic,
+      default: defaulttt,
     };
   }
 

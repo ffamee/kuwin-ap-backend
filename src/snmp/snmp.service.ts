@@ -11,7 +11,7 @@ export class SnmpService {
     private readonly flowProducer: FlowProducer,
   ) {}
 
-  // @Cron('*/5 * * * *')
+  @Cron('*/5 * * * *')
   async getSnmp() {
     const wlcs = [
       // { name: 'wlc-1', host: '172.16.26.10' },
@@ -32,7 +32,8 @@ export class SnmpService {
     const oidClient = '1.3.6.1.4.1.14179.2.2.2.1.15'; // No. of clients connected to AP
     const oidRx = '1.3.6.1.4.1.9.9.513.1.2.2.1.13'; // Rx bytes
     const oidTx = '1.3.6.1.4.1.9.9.513.1.2.2.1.14'; // Tx bytes
-    const oids = [oidClient, oidRx, oidTx];
+    const oidIp = '1.3.6.1.4.1.14179.2.2.1.1.19'; // IP address of AP
+    const oids = [oidClient, oidRx, oidTx, oidIp];
     // await this.wlcPollingQueue.addBulk(
     //   wlcs.map((wlc) => ({
     //     name: 'wlc',

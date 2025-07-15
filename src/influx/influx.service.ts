@@ -77,6 +77,7 @@ export class InfluxService {
         .tag('ap_id', metrics.apId.value as string)
         .tag('building_id', metrics.buildingId.value as string)
         .tag('entity_id', metrics.entityId.value as string)
+        .tag('ip_address', metrics.ip.value as string)
         .tag('mac_address', mac)
         .tag('section_id', metrics.sectionId.value as string)
         .tag('wlc', wlc);
@@ -86,7 +87,8 @@ export class InfluxService {
           name === 'apId' ||
           name === 'buildingId' ||
           name === 'entityId' ||
-          name === 'sectionId'
+          name === 'sectionId' ||
+          name === 'ip'
         )
           continue;
         if (metric.type === snmp.ObjectType.Counter) {
@@ -192,5 +194,183 @@ export class InfluxService {
       console.error('Error querying last point from InfluxDB:', error);
       throw new Error('Failed to query last point from InfluxDB');
     }
+  }
+
+  async findOneAp(
+    sectionId: number,
+    entityId: number,
+    buildingId: number,
+    apId: number,
+  ) {
+    const query = `import "internal/debug"
+			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+				|> range(start: -5m)
+				|> filter(fn: (r) => r._measurement == "ap_metrics")
+				|> filter(fn: (r) => r.ap_id == "${apId}" and r.entity_id == "${entityId}"
+					and r.building_id == "${buildingId}" and r.section_id == "${sectionId}")
+				|> last()
+				|> group(columns: ["mac_address"], mode: "by")
+				|> pivot(
+							rowKey:["_time", "mac_address"],
+							columnKey: ["_field"],
+							valueColumn: "_value"
+						)
+				|> map(fn: (r) => ({
+					r with
+						tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+						rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+						"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
+						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
+						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
+					}))`;
+
+    try {
+      const result = await this.queryApi.collectRows(query);
+      return result || null; // Return the last point or null if no points found
+    } catch (error) {
+      console.error('Error querying last point from InfluxDB:', error);
+      throw new Error('Failed to query last point from InfluxDB');
+    }
+  }
+
+  async findOneBuilding(
+    sectionId: number,
+    entityId: number,
+    buildingId: number,
+  ) {
+    const query = `import "internal/debug"
+			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+				|> range(start: -5m)
+				|> filter(fn: (r) => r._measurement == "ap_metrics")
+				|> filter(fn: (r) => r.entity_id == "${entityId}" and r.building_id == "${buildingId}"
+					and r.section_id == "${sectionId}")
+				|> last()
+				|> group(columns: ["_field"], mode: "by")
+				|> sum()
+				|> group(columns: ["result"], mode: "by")
+				|> pivot(
+							rowKey:[],
+							columnKey: ["_field"],
+							valueColumn: "_value"
+						)
+				|> map(fn: (r) => ({
+					r with
+						tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+						rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+						"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
+						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
+						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
+					}))`;
+
+    try {
+      const result = await this.queryApi.collectRows(query);
+      return result || null; // Return the last point or null if no points found
+    } catch (error) {
+      console.error('Error querying last point from InfluxDB:', error);
+      throw new Error('Failed to query last point from InfluxDB');
+    }
+  }
+
+  async findOneEntity(sectionId: number, entityId: number) {
+    const query = `import "internal/debug"
+			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+				|> range(start: -5m)
+				|> filter(fn: (r) => r._measurement == "ap_metrics")
+				|> filter(fn: (r) => r.entity_id == "${entityId}" and r.section_id == "${sectionId}")
+				|> last()
+				|> group(columns: ["_field"], mode: "by")
+				|> sum()
+				|> group(columns: ["result"], mode: "by")
+				|> pivot(
+							rowKey:[],
+							columnKey: ["_field"],
+							valueColumn: "_value"
+						)
+				|> map(fn: (r) => ({
+					r with
+						tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+						rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+						"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
+						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
+						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
+					}))`;
+
+    try {
+      const result = await this.queryApi.collectRows(query);
+      return result || null; // Return the last point or null if no points found
+    } catch (error) {
+      console.error('Error querying last point from InfluxDB:', error);
+      throw new Error('Failed to query last point from InfluxDB');
+    }
+  }
+
+  async findOneSection(sectionId: number) {
+    const query = `import "internal/debug"
+			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+				|> range(start: -5m)
+				|> filter(fn: (r) => r._measurement == "ap_metrics")
+				|> filter(fn: (r) => r.section_id == "${sectionId}")
+				|> last()
+				|> group(columns: ["entity_id", "_field"], mode: "by")
+				|> sum()
+				// |> group(columns: ["result"], mode: "by")
+				|> pivot(
+							rowKey:[],
+							columnKey: ["_field"],
+							valueColumn: "_value"
+						)
+				|> map(fn: (r) => ({
+					r with
+						tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+						rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+						"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
+						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
+						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
+					}))`;
+
+    try {
+      const result = await this.queryApi.collectRows(query);
+      return result || null; // Return the last point or null if no points found
+    } catch (error) {
+      console.error('Error querying last point from InfluxDB:', error);
+      throw new Error('Failed to query last point from InfluxDB');
+    }
+  }
+
+  async test() {
+    const query = `
+			from(bucket: "test")
+				|> range(start: -15m)
+				|> filter(fn: (r) => r._measurement == "measure")
+				|> last()
+				|> group(columns: ["group", "num"], mode: "by")
+				|> sum()`;
+    try {
+      const result = await this.queryApi.collectRows(query);
+      return result || null; // Return the last point or null if no points found
+    } catch (error) {
+      console.error('Error querying last point from InfluxDB:', error);
+      throw new Error('Failed to query last point from InfluxDB');
+    }
+  }
+
+  async write(num: number, group: string, name: string) {
+    const url = this.configService.get<string>('INFLUX_URL');
+    const token = this.configService.get<string>('INFLUX_TOKEN');
+    const org = this.configService.get<string>('INFLUX_ORG');
+
+    if (!url || !token || !org) {
+      throw new Error('InfluxDB configuration is missing');
+    }
+
+    const influxDB = new InfluxDB({ url, token });
+    const writeApi = influxDB.getWriteApi(org, 'test', 'ms');
+    const point = new Point('measure')
+      .tag('group', group)
+      .tag('name', name)
+      .intField('num', num);
+
+    writeApi.writePoint(point);
+    return await writeApi.flush();
   }
 }

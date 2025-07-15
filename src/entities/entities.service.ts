@@ -18,12 +18,14 @@ import { UpdateEntityDto } from './dto/update-entity.dto';
 import { Section } from 'src/section/entities/section.entity';
 import { ConfigService } from '@nestjs/config';
 import { deleteFile, saveFile } from 'src/shared/utils/file-system';
+import { InfluxService } from 'src/influx/influx.service';
 
 @Injectable()
 export class EntitiesService {
   constructor(
     private dataSource: DataSource,
     private readonly configService: ConfigService,
+    private readonly influxService: InfluxService,
     @InjectRepository(Entity)
     private entityRepository: Repository<Entity>,
     @Inject(forwardRef(() => SectionService))
@@ -123,17 +125,23 @@ export class EntitiesService {
         `Entity with sectionId ${sectionId} and entityId ${entityId} not found`,
       );
     }
-    const [apAll, apMaintain, apDown, totalUser, buildings, accesspoints] =
-      await Promise.all([
-        this.accesspointsService.countAPInEntity(entityId),
-        this.accesspointsService.countAPMaintainInEntity(entityId),
-        this.accesspointsService.countAPDownInEntity(entityId),
-        this.accesspointsService.sumAllClientInEntity(entityId),
-        this.buildingsService.findBuildingWithApCount(entityId),
-        this.accesspointsService.findOverviewApInEntityGroupByBuilding(
-          entityId,
-        ),
-      ]);
+    const [
+      apAll,
+      apMaintain,
+      apDown,
+      totalUser,
+      buildings,
+      accesspoints,
+      dynamic,
+    ] = await Promise.all([
+      this.accesspointsService.countAPInEntity(entityId),
+      this.accesspointsService.countAPMaintainInEntity(entityId),
+      this.accesspointsService.countAPDownInEntity(entityId),
+      this.accesspointsService.sumAllClientInEntity(entityId),
+      this.buildingsService.findBuildingWithApCount(entityId),
+      this.accesspointsService.findOverviewApInEntityGroupByBuilding(entityId),
+      this.influxService.findOneEntity(sectionId, entityId),
+    ]);
     return {
       id: entity.id,
       name: entity.name,
@@ -143,6 +151,7 @@ export class EntitiesService {
       totalUser,
       buildings,
       accesspoints,
+      dynamic,
     };
   }
 

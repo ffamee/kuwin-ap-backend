@@ -17,12 +17,14 @@ import { ConfigService } from '@nestjs/config';
 import { deleteFile, saveFile } from 'src/shared/utils/file-system';
 import { Accesspoint } from 'src/accesspoints/entities/accesspoint.entity';
 import { Entity } from 'src/entities/entities/entity.entity';
+import { InfluxService } from 'src/influx/influx.service';
 
 @Injectable()
 export class BuildingsService {
   constructor(
     private dataSource: DataSource,
     private readonly configService: ConfigService,
+    private readonly influxService: InfluxService,
     @InjectRepository(Building)
     private buildingRepository: Repository<Building>,
     @Inject(forwardRef(() => EntitiesService))
@@ -95,11 +97,12 @@ export class BuildingsService {
     if (!building) {
       throw new NotFoundException(`Building with id ${buildingId} not found`);
     }
-    const [apAll, apMaintain, apDown, totalUser] = await Promise.all([
+    const [apAll, apMaintain, apDown, totalUser, dynamic] = await Promise.all([
       this.accesspointsService.countAPInBuilding(buildingId),
       this.accesspointsService.countAPMaintainInBuilding(buildingId),
       this.accesspointsService.countAPDownInBuilding(buildingId),
       this.accesspointsService.sumAllClientInBuilding(buildingId),
+      this.influxService.findOneBuilding(sectionId, entityId, buildingId),
     ]);
     return {
       id: building.id,
@@ -110,6 +113,7 @@ export class BuildingsService {
       totalUser,
       accesspoints: building.accesspoints,
       entity: building.entity,
+      dynamic,
     };
   }
 

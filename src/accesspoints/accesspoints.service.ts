@@ -293,35 +293,48 @@ export class AccesspointsService {
     entityId: number,
     buildingId: number,
     apId: number,
-  ): Promise<Accesspoint> {
-    const accesspoint = await this.accesspointRepository.findOne({
-      where: {
-        id: apId,
-        building: {
-          id: buildingId,
-          entity: { id: entityId, section: { id: sectionId } },
-        },
-      },
-      relations: {
-        building: {
-          entity: {
-            section: true,
+  ) {
+    if (
+      !(await this.accesspointRepository.exists({
+        where: {
+          id: apId,
+          building: {
+            id: buildingId,
+            entity: { id: entityId, section: { id: sectionId } },
           },
         },
-      },
-      select: {
-        building: {
-          name: true,
-          entity: { name: true, section: { name: true } },
-        },
-      },
-    });
-    if (!accesspoint) {
+      }))
+    ) {
       throw new NotFoundException(
         `Access point with id ${apId} not found in section ${sectionId}, entity ${entityId}, building ${buildingId}`,
       );
     }
-    return accesspoint;
+    const [staticData, dynamicSata] = await Promise.all([
+      this.accesspointRepository.findOne({
+        where: {
+          id: apId,
+          building: {
+            id: buildingId,
+            entity: { id: entityId, section: { id: sectionId } },
+          },
+        },
+        relations: {
+          building: {
+            entity: {
+              section: true,
+            },
+          },
+        },
+        select: {
+          building: {
+            name: true,
+            entity: { name: true, section: { name: true } },
+          },
+        },
+      }),
+      this.influxService.findOneAp(sectionId, entityId, buildingId, apId),
+    ]);
+    return { staticData, dynamicSata };
   }
 
   findAllDownAccesspoints(): Promise<Accesspoint[]> {

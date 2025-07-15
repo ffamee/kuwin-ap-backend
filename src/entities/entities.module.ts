@@ -9,6 +9,7 @@ import { BuildingsModule } from 'src/buildings/buildings.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { join } from 'path';
+import { InfluxModule } from 'src/influx/influx.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { join } from 'path';
     forwardRef(() => SectionModule),
     forwardRef(() => BuildingsModule),
     forwardRef(() => AccesspointsModule),
+    InfluxModule,
     MulterModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
