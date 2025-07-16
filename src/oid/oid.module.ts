@@ -7,6 +7,7 @@ import {
 import { OidPollingProcessor } from './oid.processor';
 import { Queue, Worker } from 'bullmq';
 import { ModuleRef } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
   providers: [OidPollingProcessor],
@@ -17,7 +18,10 @@ export class OidModule implements OnModuleInit, OnApplicationShutdown {
   private queues: Queue[] = [];
   private logger = new Logger(OidModule.name, { timestamp: true });
 
-  constructor(private moduleRef: ModuleRef) {}
+  constructor(
+    private moduleRef: ModuleRef,
+    private readonly configService: ConfigService,
+  ) {}
 
   onModuleInit() {
     const wlcs = [
@@ -38,7 +42,7 @@ export class OidModule implements OnModuleInit, OnApplicationShutdown {
 
       const queue = new Queue(queueName, {
         connection: {
-          host: 'localhost',
+          host: this.configService.get<string>('REDIS_HOST'),
           port: 6379,
         },
         defaultJobOptions: {
@@ -53,7 +57,7 @@ export class OidModule implements OnModuleInit, OnApplicationShutdown {
         async (job) => processor.process(job),
         {
           connection: {
-            host: 'localhost',
+            host: this.configService.get<string>('REDIS_HOST'),
             port: 6379,
           },
           concurrency: 3,
