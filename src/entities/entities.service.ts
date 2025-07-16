@@ -164,6 +164,15 @@ export class EntitiesService {
         `Section with ID ${createEntityDto.sectionId} not found`,
       );
     }
+    if (
+      await this.entityRepository.exists({
+        where: { name: createEntityDto.name },
+      })
+    ) {
+      throw new ConflictException(
+        `Entity with name ${createEntityDto.name} already exists`,
+      );
+    }
     const filename = file
       ? await saveFile(this.configService, file, 'entities')
       : 'default.png';

@@ -237,6 +237,9 @@ export class EntitiesController {
   @ApiNotFoundResponse({
     description: 'Section with the given ID not found',
   })
+  @ApiConflictResponse({
+    description: 'Entity with the given name already exists',
+  })
   @ApiResponse({
     status: 413,
     description: 'File too large, maximum size is 10MB',
