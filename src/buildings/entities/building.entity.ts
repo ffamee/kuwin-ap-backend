@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { Entity } from '../../entities/entities/entity.entity';
 import { Accesspoint } from '../../accesspoints/entities/accesspoint.entity';
+import { Location } from '../../locations/entities/location.entity';
 
 @TypeOrmEntity('building')
 export class Building {
@@ -50,4 +51,7 @@ export class Building {
 
   @OneToMany(() => Accesspoint, (accesspoint) => accesspoint.building)
   accesspoints: Accesspoint[];
+
+  @OneToMany(() => Location, (location) => location.building)
+  locations: Location[];
 }
