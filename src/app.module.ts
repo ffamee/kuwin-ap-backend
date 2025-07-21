@@ -19,6 +19,8 @@ import { OidModule } from './oid/oid.module';
 import { StatsModule } from './stats/stats.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { IpModule } from './ip/ip.module';
+import { LocationsModule } from './locations/locations.module';
 
 @Module({
   imports: [
@@ -86,6 +88,8 @@ import { join } from 'path';
     SnmpModule,
     OidModule,
     StatsModule,
+    IpModule,
+    LocationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
