@@ -1,3 +1,4 @@
+import { History } from '../../histories/entities/history.entity';
 import {
   Column,
   CreateDateColumn,
@@ -5,7 +6,7 @@ import {
   Index,
   // ManyToOne,
   PrimaryGeneratedColumn,
-  // OneToMany,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('ip')
@@ -54,4 +55,7 @@ export class Ip {
 
   // @OneToMany(() => Accesspoint, (accesspoint) => accesspoint.building)
   // accesspoints: Accesspoint[];
+
+  @OneToMany(() => History, (history) => history.ip)
+  histories: History[];
 }

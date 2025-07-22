@@ -1,3 +1,4 @@
+import { History } from '../../histories/entities/history.entity';
 import { Building } from '../../buildings/entities/building.entity';
 import {
   Column,
@@ -7,7 +8,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-  // OneToMany,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('location')
@@ -39,6 +40,6 @@ export class Location {
   })
   building: Building;
 
-  // @OneToMany(() => Accesspoint, (accesspoint) => accesspoint.building)
-  // accesspoints: Accesspoint[];
+  @OneToMany(() => History, (history) => history.location)
+  histories: History[];
 }

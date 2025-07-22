@@ -21,6 +21,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { IpModule } from './ip/ip.module';
 import { LocationsModule } from './locations/locations.module';
+import { HistoriesModule } from './histories/histories.module';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { LocationsModule } from './locations/locations.module';
     StatsModule,
     IpModule,
     LocationsModule,
+    HistoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,3 +1,4 @@
+import { History } from '../../histories/entities/history.entity';
 import { Building } from '../../buildings/entities/building.entity';
 import {
   Check,
@@ -5,6 +6,7 @@ import {
   Entity,
   Index,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -46,10 +48,10 @@ export class Accesspoint {
   numberClient: number;
 
   @Column('bigint', { name: 'RXBS', nullable: true, unsigned: true })
-  rxbs: string | null;
+  rxbs: number | null;
 
   @Column('bigint', { name: 'TXBS', nullable: true, unsigned: true })
-  txbs: string | null;
+  txbs: number | null;
 
   @Column('varchar', { name: 'zone', nullable: true, length: 100, default: '' })
   zone: string | null;
@@ -212,4 +214,7 @@ export class Accesspoint {
     onUpdate: 'CASCADE',
   })
   building: Building;
+
+  @OneToMany(() => History, (history) => history.accesspoint)
+  histories: History[];
 }
