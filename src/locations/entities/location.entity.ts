@@ -1,5 +1,6 @@
 import { History } from '../../histories/entities/history.entity';
 import { Building } from '../../buildings/entities/building.entity';
+import { Configuration } from '../../configurations/entities/configuration.entity';
 import {
   Column,
   CreateDateColumn,
@@ -9,6 +10,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
   OneToMany,
+  OneToOne,
 } from 'typeorm';
 
 @Entity('location')
@@ -42,4 +44,10 @@ export class Location {
 
   @OneToMany(() => History, (history) => history.location)
   histories: History[];
+
+  @OneToOne(() => Configuration, (configuration) => configuration.accesspoint, {
+    nullable: true,
+    orphanedRowAction: 'nullify',
+  })
+  configuration: Configuration | null;
 }

@@ -1,3 +1,4 @@
+import { Configuration } from '../../configurations/entities/configuration.entity';
 import { History } from '../../histories/entities/history.entity';
 import {
   Column,
@@ -7,6 +8,7 @@ import {
   // ManyToOne,
   PrimaryGeneratedColumn,
   OneToMany,
+  OneToOne,
 } from 'typeorm';
 
 @Entity('ip')
@@ -58,4 +60,10 @@ export class Ip {
 
   @OneToMany(() => History, (history) => history.ip)
   histories: History[];
+
+  @OneToOne(() => Configuration, (configuration) => configuration.accesspoint, {
+    nullable: true,
+    orphanedRowAction: 'nullify',
+  })
+  configuration: Configuration | null;
 }

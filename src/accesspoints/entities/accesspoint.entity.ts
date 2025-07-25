@@ -1,5 +1,6 @@
 import { History } from '../../histories/entities/history.entity';
 import { Building } from '../../buildings/entities/building.entity';
+import { Configuration } from '../../configurations/entities/configuration.entity';
 import {
   Check,
   Column,
@@ -7,6 +8,7 @@ import {
   Index,
   ManyToOne,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -217,4 +219,10 @@ export class Accesspoint {
 
   @OneToMany(() => History, (history) => history.accesspoint)
   histories: History[];
+
+  @OneToOne(() => Configuration, (configuration) => configuration.accesspoint, {
+    nullable: true,
+    orphanedRowAction: 'nullify',
+  })
+  configuration: Configuration | null;
 }
