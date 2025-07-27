@@ -1,41 +1,133 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { InfluxService } from '../influx/influx.service';
-import { AccesspointsService } from '../accesspoints/accesspoints.service';
-import { Metrics } from '../shared/types/snmp-metrics';
+import { Metrics } from 'src/shared/types/snmp-metrics';
+import { StatusState } from 'src/shared/types/define-state';
 @Processor('wlc-polling-queue', { concurrency: 5 })
 export class WlcPollingProcessor extends WorkerHost {
-  constructor(
-    private readonly influxService: InfluxService,
-    private readonly accesspointsService: AccesspointsService,
-  ) {
+  private radioBand: { [key: string]: string };
+  constructor(private readonly influxService: InfluxService) {
     super();
+    this.radioBand = {
+      '1': '24',
+      '2': '5',
+      '3': '6',
+    };
   }
 
   async process(job: Job) {
     // const deps = await job.getDependencies();
     const { wlcName } = job.data as { wlcName: string };
     const childJobs = await job.getChildrenValues();
-    const data = new Map<string, Record<string, Metrics>>();
+    const data = new Map<string, Record<string, unknown>>();
     for (const v of Object.values(childJobs)) {
-      const value = v as Record<string, Record<string, Metrics>>;
+      if (!v) continue;
+      const value = v as Record<string, Record<string, unknown>>;
       for (const [mac, metrics] of Object.entries(value)) {
-        const existing =
-          data.get(mac) ??
-          ((await this.accesspointsService.findIdByRadMac(mac)) as Record<
-            string,
-            Metrics
-          >);
-        for (const [name, metric] of Object.entries(metrics)) {
-          existing[name] = metric;
-        }
+        // map key, value of metrics to const
+        const key = Object.keys(metrics)[0];
+        const value = Object.values(metrics)[0];
+        const existing = data.get(mac) ?? {};
+        // for (const [name, metric] of Object.entries(rest)) {
+        //   existing[name] = metric;
+        // }
+        existing[key] = value;
+
         data.set(mac, existing);
       }
     }
-    // console.dir({ wlcName, data }, { depth: null, colors: true });
-    // Save data to InfluxDB
-
-    return await this.influxService.writePoints('ap_metrics', wlcName, data);
+    for (const [mac, metrics] of data.entries()) {
+      const { radio, band, client, status, ...rest } = metrics as Record<
+        string,
+        Metrics
+      >;
+      try {
+        if (status.value === 1) {
+          // AP is on
+          let statusValue: StatusState = StatusState.Up;
+          const radioValue = radio.value as Record<string, unknown>;
+          const bandValue = band.value as Record<string, unknown>;
+          const clientValue = client.value as Record<string, unknown>;
+          if (
+            Object.keys(radioValue).length !== Object.keys(bandValue).length ||
+            Object.keys(radioValue).length !==
+              Object.keys(clientValue).length ||
+            Object.keys(clientValue).length !== Object.keys(bandValue).length
+          ) {
+            console.warn(
+              `Mismatch in radio, band, and client data for ${mac}. with lengths: radio=${
+                Object.keys(radioValue).length
+              }, band=${Object.keys(bandValue).length}, client=${
+                Object.keys(clientValue).length
+              }`,
+            );
+            continue;
+          }
+          const clientBand: { [key: string]: Metrics } = {};
+          for (const index of Object.keys(radioValue)) {
+            const radioData = radioValue[index];
+            const bandData = bandValue[index];
+            const clientData = clientValue[index];
+            if (
+              !(
+                index in radioValue &&
+                index in bandValue &&
+                index in clientValue
+              )
+            ) {
+              console.warn(
+                `Missing data for ${mac} at index ${index}. Skipping this entry. with radio=${(radioData as string) ?? 'N/A'}, band=${(bandData as string) ?? 'N/A'}, client=${(clientData as string) ?? 'N/A'}`,
+              );
+              continue;
+            }
+            if (radioData !== 2) {
+              // set status to roff
+              statusValue = StatusState.Roff;
+              continue;
+            }
+            // check bandData is valid in this.radioBand
+            if (!((bandData as string) in this.radioBand)) {
+              console.warn(
+                `Invalid band data for ${mac} at index ${index}. Skipping this entry.`,
+              );
+              continue;
+            }
+            const t = `client-${this.radioBand[bandData as string]}`;
+            if (!clientBand[t]) {
+              clientBand[t] = {
+                value: 0,
+                type: client.type,
+              };
+            }
+            (clientBand[t].value as number) += clientData as number;
+          }
+          // get id before save
+          // save back to data
+          data.set(mac, {
+            ...rest,
+            ...clientBand,
+            status: { value: statusValue, type: 0 },
+          });
+        }
+        // else {
+        //   data.set(mac, {
+        //     ...rest,
+        //     status: { value: StatusState.Down, type: 0 },
+        //   });
+        // }
+      } catch (error) {
+        console.error(`Error processing metrics for ${mac}:`, error, {
+          radio,
+          band,
+          client,
+          status,
+        });
+      }
+    }
+    console.dir(data, {
+      depth: null,
+    });
+    // return await this.influxService.writePoints('ap_metrics', wlcName, data);
   }
 
   @OnWorkerEvent('active')
@@ -63,6 +155,10 @@ export class WlcPollingProcessor extends WorkerHost {
 
   @OnWorkerEvent('failed')
   onFailed(job: Job, err: Error) {
+    const { data } = job.data as {
+      data: string;
+    };
     console.error(`Job ${job.id} failed with error:`, err.message);
+    console.timeEnd(data);
   }
 }

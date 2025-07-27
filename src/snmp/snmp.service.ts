@@ -1,7 +1,7 @@
 import { InjectFlowProducer, InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { FlowProducer, Queue } from 'bullmq';
+import { FlowProducer, Queue, QueueEvents } from 'bullmq';
 
 @Injectable()
 export class SnmpService {
@@ -19,21 +19,22 @@ export class SnmpService {
       // { name: 'wlc-3', host: '172.16.26.16' },
       { name: 'wlc-4', host: '172.16.26.11' },
     ];
-    // const oids = [
-    //   'oid-1',
-    //   'oid-2',
-    //   'oid-3',
-    //   'oid-4',
-    //   'oid-5',
-    //   'oid-6',
-    //   'oid-7',
-    //   'oid-8',
-    // ];
     const oidClient = '1.3.6.1.4.1.14179.2.2.2.1.15'; // No. of clients connected to AP
     const oidRx = '1.3.6.1.4.1.9.9.513.1.2.2.1.13'; // Rx bytes
     const oidTx = '1.3.6.1.4.1.9.9.513.1.2.2.1.14'; // Tx bytes
     const oidIp = '1.3.6.1.4.1.14179.2.2.1.1.19'; // IP address of AP
-    const oids = [oidClient, oidRx, oidTx, oidIp];
+    const oidAPStatus = '1.3.6.1.4.1.14179.2.2.1.1.6';
+    const oidRadioStatus = '1.3.6.1.4.1.14179.2.2.2.1.12';
+    const oidRadioBand = '1.3.6.1.4.1.9.9.513.1.2.1.1.27';
+    const oids = [
+      oidClient,
+      oidRx,
+      oidTx,
+      oidIp,
+      oidAPStatus,
+      oidRadioStatus,
+      oidRadioBand,
+    ];
     // await this.wlcPollingQueue.addBulk(
     //   wlcs.map((wlc) => ({
     //     name: 'wlc',
@@ -45,7 +46,7 @@ export class SnmpService {
     //     },
     //   })),
     // );
-    await this.flowProducer.addBulk(
+    const jobs = await this.flowProducer.addBulk(
       wlcs.map((wlc) => ({
         name: 'wlc-polling-job',
         queueName: 'wlc-polling-queue',
@@ -66,6 +67,11 @@ export class SnmpService {
             removeOnComplete: { age: 180, count: 100 },
             removeOnFail: { age: 180, count: 100 },
             ignoreDependencyOnFailure: true,
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 1000, // 1 second
+            },
           },
         })),
         opts: {
@@ -75,5 +81,10 @@ export class SnmpService {
       })),
     );
     console.log({ message: 'SNMP polling jobs added to the queue!' });
+    // const queueEvent = new QueueEvents('wlc-polling-queue');
+    // await Promise.all(jobs.map((job) => job.job.waitUntilFinished(queueEvent)));
+    // console.log('All SNMP polling jobs have been processed successfully!');
+    // await this.accessPointsService.updateSnapshot();
+    // console.log('Update snapshot completed!');
   }
 }
