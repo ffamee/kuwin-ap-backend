@@ -14,6 +14,7 @@ export const dataSourceOptions: DataSourceOptions = {
   entities: [__dirname + '/**/*.entity{.ts,.js}'],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   charset: 'utf8mb4',
+  subscribers: [__dirname + '/**/*.subscriber{.ts,.js}'],
 };
 
 export default registerAs('typeorm', () => dataSourceOptions);
