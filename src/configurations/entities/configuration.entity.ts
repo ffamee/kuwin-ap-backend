@@ -87,7 +87,7 @@ export class Configuration {
   @OneToOne(() => Accesspoint, (accesspoint) => accesspoint.configuration, {
     cascade: ['insert'],
     onDelete: 'CASCADE',
-    nullable: false,
+    nullable: true,
   })
   @JoinColumn()
   accesspoint: Accesspoint;

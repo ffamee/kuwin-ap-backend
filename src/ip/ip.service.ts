@@ -7,7 +7,7 @@ import { Repository } from 'typeorm';
 export class IpService {
   constructor(@InjectRepository(Ip) private ipRepository: Repository<Ip>) {}
 
-  async create(ip: string) {
+  private async create(ip: string) {
     try {
       const res = (await this.ipRepository.query(
         `INSERT INTO ip (ip_address)
@@ -35,6 +35,12 @@ export class IpService {
             message: 'Invalid IP address format',
             detail: error.message,
           };
+        else if (error.code === 'ER_CHECK_CONSTRAINT_VIOLATED')
+          return {
+            success: false,
+            message: 'IP address does not meet the required constraints',
+            detail: error.message,
+          };
       }
       console.error('Error creating IP address:', error);
       return null;
@@ -42,7 +48,7 @@ export class IpService {
   }
 
   // function to get IP id by IP address, if not exists, create it
-  async getIpId(ip: string): Promise<number | null> {
+  async getIp(ip: string): Promise<number | null> {
     const existingIp = await this.ipRepository.findOne({
       where: { ip },
       select: ['id'],
@@ -54,6 +60,7 @@ export class IpService {
       if (res && res.success && res.id) {
         return res.id;
       }
+      console.error('Failed to create IP address:', res);
       return null;
     }
   }

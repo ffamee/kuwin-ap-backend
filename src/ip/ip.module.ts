@@ -8,5 +8,6 @@ import { Ip } from './entities/ip.entity';
   imports: [TypeOrmModule.forFeature([Ip])],
   controllers: [IpController],
   providers: [IpService],
+  exports: [IpService], // Exporting IpService to be used in other modules
 })
 export class IpModule {}
