@@ -24,19 +24,21 @@ export class Ip {
   })
   ip: string;
 
-  @Column('bigint', {
+  @Column({
+    type: 'bigint',
     name: 'ip_number',
-    unsigned: true,
-    nullable: false,
-    unique: true,
+    generatedType: 'STORED',
+    asExpression: 'INET_ATON(ip_address)',
   })
   ipNumber: number; // or bigint, depending on your database
 
-  @Column('varbinary', {
+  @Column({
+    type: 'varbinary',
     name: 'ip_binary',
     length: 128,
-    nullable: false,
-    unique: true,
+    generatedType: 'STORED',
+    asExpression:
+      "CAST(LPAD(BIN(INET_ATON(ip_address)), 32, '0') AS BINARY(32))",
   })
   ipBinary: Buffer;
 
