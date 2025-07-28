@@ -22,6 +22,7 @@ import { join } from 'path';
 import { IpModule } from './ip/ip.module';
 import { LocationsModule } from './locations/locations.module';
 import { HistoriesModule } from './histories/histories.module';
+import { ConfigurationsModule } from './configurations/configurations.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { HistoriesModule } from './histories/histories.module';
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
         charset: 'utf8mb4',
+        subscribers: [__dirname + '/**/*.subscriber{.ts,.js}'],
       }),
     }),
     ScheduleModule.forRoot(),
@@ -92,6 +94,7 @@ import { HistoriesModule } from './histories/histories.module';
     IpModule,
     LocationsModule,
     HistoriesModule,
+    ConfigurationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
