@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Location } from './entities/location.entity';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 
 @Injectable()
 export class LocationsService {
@@ -15,13 +15,17 @@ export class LocationsService {
     private locationsRepository: Repository<Location>,
   ) {}
 
-  private async create(name: string, buildingId: number) {
+  private async create(
+    manager: EntityManager,
+    name: string,
+    buildingId: number,
+  ) {
     try {
-      const location = this.locationsRepository.create({
+      const location = manager.create(Location, {
         name,
         building: { id: buildingId },
       });
-      const res = await this.locationsRepository.save(location);
+      const res = await manager.save(location);
       if (res) {
         return res;
       }
@@ -35,20 +39,26 @@ export class LocationsService {
         else if (error.code === 'ER_NO_REFERENCED_ROW_2') {
           throw new NotFoundException('Building does not exist');
         }
-        return error;
+        throw new InternalServerErrorException(
+          'An unexpected error occurred while creating the location',
+        );
       }
     }
   }
 
-  async getLocation(name: string, buildingId: number): Promise<number | null> {
-    const existingLocation = await this.locationsRepository.findOne({
+  async getLocation(
+    manager: EntityManager,
+    name: string,
+    buildingId: number,
+  ): Promise<number | null> {
+    const existingLocation = await manager.findOne(Location, {
       where: { name, building: { id: buildingId } },
       select: ['id'],
     });
     if (existingLocation) {
       return existingLocation.id;
     } else {
-      const res = await this.create(name, buildingId);
+      const res = await this.create(manager, name, buildingId);
       if (res instanceof Location) {
         return res.id;
       }
