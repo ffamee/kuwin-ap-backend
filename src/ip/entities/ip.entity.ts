@@ -63,7 +63,7 @@ export class Ip {
   @OneToMany(() => History, (history) => history.ip)
   histories: History[];
 
-  @OneToOne(() => Configuration, (configuration) => configuration.accesspoint, {
+  @OneToOne(() => Configuration, (configuration) => configuration.ip, {
     nullable: true,
     orphanedRowAction: 'nullify',
   })

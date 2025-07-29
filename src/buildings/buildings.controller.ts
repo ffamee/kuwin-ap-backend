@@ -99,9 +99,9 @@ export class BuildingsController {
     description: 'All buildings',
     type: [Building],
   })
-  @Get()
-  findAll() {
-    return this.buildingsService.findAll();
+  @Get(':id')
+  find(@Param('id') id: string) {
+    return this.buildingsService.find(+id);
   }
 
   @ApiOperation({ summary: 'Create a new building' })

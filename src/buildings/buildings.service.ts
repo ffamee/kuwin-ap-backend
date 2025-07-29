@@ -117,6 +117,100 @@ export class BuildingsService {
     };
   }
 
+  async find(id: number) {
+    // join location and then join location to configuration and count *
+    const [num, building] = await Promise.all([
+      this.buildingRepository
+        .createQueryBuilder('building')
+        .leftJoin('building.locations', 'location')
+        .leftJoin('location.configuration', 'configuration')
+        .select('COUNT(configuration.id)', 'configCount')
+        .addSelect(
+          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
+          'downCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
+          'maCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
+          'c24Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
+          'c5Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
+          'c6Count',
+        )
+        .where('building.id = :id', { id })
+        .andWhere('configuration.id IS NOT NULL')
+        .getRawOne<{
+          configCount: number;
+          downCount: number;
+          maCount: number;
+          c24Count: number;
+          c5Count: number;
+          c6Count: number;
+        }>(),
+      this.buildingRepository
+        .createQueryBuilder('building')
+        .leftJoin('building.entity', 'entity')
+        .leftJoin('building.locations', 'location')
+        .leftJoin('location.configuration', 'configuration')
+        .leftJoin('configuration.accesspoint', 'accesspoint')
+        .leftJoin('configuration.ip', 'ip')
+        .select([
+          'building.id',
+          'building.name',
+          'entity.id',
+          'entity.name',
+          'location.id',
+          'location.name',
+          'configuration',
+          'accesspoint.id',
+          'accesspoint.name',
+          'ip.id',
+          'ip.ip',
+        ])
+        .where('building.id = :id', { id })
+        .andWhere('configuration.id IS NOT NULL')
+        .getOne(),
+    ]);
+    if (!building || !num) {
+      throw new NotFoundException(`Building with id ${id} not found`);
+    }
+    return {
+      id: building.id,
+      name: building.name,
+      entity: building.entity,
+      configurations: building.locations.flatMap((location) =>
+        location.configuration
+          ? [
+              {
+                ...location.configuration,
+                location: { id: location.id, name: location.name },
+              },
+            ]
+          : [],
+      ),
+      ...num,
+    };
+  }
+
+  async getBuildingById(id: number): Promise<Building> {
+    const building = await this.buildingRepository.findOne({
+      where: { id },
+      relations: ['entity', 'accesspoints'],
+    });
+    if (!building) {
+      throw new NotFoundException(`Building with ID ${id} not found`);
+    }
+    return building;
+  }
+
   async create(
     createBuildingDto: CreateBuildingDto,
     file: Express.Multer.File | undefined,
@@ -204,7 +298,7 @@ export class BuildingsService {
     }
     if (
       updateBuildingDto.name &&
-      (await this.buildingRepository.exist({
+      (await this.buildingRepository.exists({
         where: { name: updateBuildingDto.name, id: Not(id) },
       }))
     ) {

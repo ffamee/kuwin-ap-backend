@@ -76,4 +76,24 @@ export class ConfigurationsService {
       );
     }
   }
+
+  async findOne(id: number): Promise<Configuration> {
+    const configuration = await this.configurationsRepository.findOne({
+      where: { id },
+      relations: ['ip', 'location', 'location.building', 'accesspoint'],
+      select: {
+        ip: { id: true, ip: true },
+        location: {
+          id: true,
+          name: true,
+          building: { id: true, name: true },
+        },
+        accesspoint: { id: true, name: true },
+      },
+    });
+    if (!configuration) {
+      throw new NotFoundException(`Configuration with ID ${id} not found`);
+    }
+    return configuration;
+  }
 }

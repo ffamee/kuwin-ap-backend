@@ -45,7 +45,7 @@ export class Location {
   @OneToMany(() => History, (history) => history.location)
   histories: History[];
 
-  @OneToOne(() => Configuration, (configuration) => configuration.accesspoint, {
+  @OneToOne(() => Configuration, (configuration) => configuration.location, {
     nullable: true,
     orphanedRowAction: 'nullify',
   })
