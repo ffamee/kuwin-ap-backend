@@ -67,61 +67,63 @@ export class BuildingsService {
       .getRawMany();
   }
 
-  async getBuildingOverview(
-    sectionId: number,
-    entityId: number,
-    buildingId: number,
-  ) {
-    const building = await this.buildingRepository.findOne({
-      where: {
-        id: buildingId,
-        entity: { id: entityId, section: { id: sectionId } },
-      },
-      relations: ['accesspoints', 'entity'],
-      select: {
-        entity: { name: true, id: true },
-        accesspoints: {
-          id: true,
-          name: true,
-          status: true,
-          ip: true,
-          location: true,
-          problem: true,
-          numberClient: true,
-          numberClient_2: true,
-          wlcActive: true,
-          wlc: true,
-        },
-      },
-    });
-    if (!building) {
-      throw new NotFoundException(`Building with id ${buildingId} not found`);
-    }
-    const [apAll, apMaintain, apDown, totalUser, dynamic] = await Promise.all([
-      this.accesspointsService.countAPInBuilding(buildingId),
-      this.accesspointsService.countAPMaintainInBuilding(buildingId),
-      this.accesspointsService.countAPDownInBuilding(buildingId),
-      this.accesspointsService.sumAllClientInBuilding(buildingId),
-      this.influxService.findOneBuilding(sectionId, entityId, buildingId),
-    ]);
-    return {
-      id: building.id,
-      name: building.name,
-      apAll,
-      apMaintain,
-      apDown,
-      totalUser,
-      accesspoints: building.accesspoints,
-      entity: building.entity,
-      dynamic,
-    };
-  }
+  // async getBuildingOverview(
+  //   sectionId: number,
+  //   entityId: number,
+  //   buildingId: number,
+  // ) {
+  //   const building = await this.buildingRepository.findOne({
+  //     where: {
+  //       id: buildingId,
+  //       entity: { id: entityId, section: { id: sectionId } },
+  //     },
+  //     relations: ['accesspoints', 'entity'],
+  //     select: {
+  //       entity: { name: true, id: true },
+  //       accesspoints: {
+  //         id: true,
+  //         name: true,
+  //         status: true,
+  //         ip: true,
+  //         location: true,
+  //         problem: true,
+  //         numberClient: true,
+  //         numberClient_2: true,
+  //         wlcActive: true,
+  //         wlc: true,
+  //       },
+  //     },
+  //   });
+  //   if (!building) {
+  //     throw new NotFoundException(`Building with id ${buildingId} not found`);
+  //   }
+  // const [apAll, apMaintain, apDown, totalUser, dynamic] = await Promise.all([
+  // this.accesspointsService.countAPInBuilding(buildingId),
+  // this.accesspointsService.countAPMaintainInBuilding(buildingId),
+  // this.accesspointsService.countAPDownInBuilding(buildingId),
+  // this.accesspointsService.sumAllClientInBuilding(buildingId),
+  // this.influxService.findOneBuilding(sectionId, entityId, buildingId),
+  // ]);
+  //   return {
+  //     id: building.id,
+  //     name: building.name,
+  //     apAll,
+  //     apMaintain,
+  //     apDown,
+  //     totalUser,
+  //     accesspoints: building.accesspoints,
+  //     entity: building.entity,
+  //     dynamic,
+  //   };
+  // }
 
-  async find(id: number) {
+  async find(sectionId: number, entityId: number, buildingId: number) {
     // join location and then join location to configuration and count *
     const [num, building] = await Promise.all([
       this.buildingRepository
         .createQueryBuilder('building')
+        .leftJoin('building.entity', 'entity')
+        .leftJoin('entity.section', 'section')
         .leftJoin('building.locations', 'location')
         .leftJoin('location.configuration', 'configuration')
         .select('COUNT(configuration.id)', 'configCount')
@@ -145,7 +147,9 @@ export class BuildingsService {
           `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
           'c6Count',
         )
-        .where('building.id = :id', { id })
+        .where('building.id = :id', { id: buildingId })
+        .andWhere('entity.id = :entityId', { entityId })
+        .andWhere('section.id = :sectionId', { sectionId })
         .andWhere('configuration.id IS NOT NULL')
         .getRawOne<{
           configCount: number;
@@ -158,6 +162,7 @@ export class BuildingsService {
       this.buildingRepository
         .createQueryBuilder('building')
         .leftJoin('building.entity', 'entity')
+        .leftJoin('entity.section', 'section')
         .leftJoin('building.locations', 'location')
         .leftJoin('location.configuration', 'configuration')
         .leftJoin('configuration.accesspoint', 'accesspoint')
@@ -175,12 +180,14 @@ export class BuildingsService {
           'ip.id',
           'ip.ip',
         ])
-        .where('building.id = :id', { id })
+        .where('building.id = :id', { id: buildingId })
+        .andWhere('entity.id = :entityId', { entityId })
+        .andWhere('section.id = :sectionId', { sectionId })
         .andWhere('configuration.id IS NOT NULL')
         .getOne(),
     ]);
     if (!building || !num) {
-      throw new NotFoundException(`Building with id ${id} not found`);
+      throw new NotFoundException(`Building with id ${buildingId} not found`);
     }
     return {
       id: building.id,

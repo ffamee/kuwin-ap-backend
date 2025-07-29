@@ -87,22 +87,14 @@ export class BuildingsController {
     @Query('entity') entityId: string,
     @Query('build') buildingId: string,
   ) {
-    return this.buildingsService.getBuildingOverview(
-      +sectionId,
-      +entityId,
-      +buildingId,
-    );
+    // return this.buildingsService.getBuildingOverview(
+    return this.buildingsService.find(+sectionId, +entityId, +buildingId);
   }
 
-  @ApiOperation({ summary: 'Get all buildings' })
-  @ApiOkResponse({
-    description: 'All buildings',
-    type: [Building],
-  })
-  @Get(':id')
-  find(@Param('id') id: string) {
-    return this.buildingsService.find(+id);
-  }
+  // @Get(':id')
+  // find(@Param('id') id: string) {
+  //   return this.buildingsService.find(+id);
+  // }
 
   @ApiOperation({ summary: 'Create a new building' })
   @ApiBody({
