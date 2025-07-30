@@ -316,6 +316,11 @@ export class EntitiesService {
         }>(),
     ]);
 
+    if (!entity || !num || !numEach) {
+      throw new NotFoundException(
+        `Entity with sectionId ${sectionId} and entityId ${entityId} not found`,
+      );
+    }
     return {
       ...entity,
       buildings: entity.buildings.flatMap((building) => {
