@@ -43,29 +43,29 @@ export class BuildingsService {
     });
   }
 
-  async findBuildingWithApCount(entityId: number) {
-    return this.buildingRepository
-      .createQueryBuilder('building')
-      .leftJoin('building.entity', 'entity')
-      .leftJoin('building.accesspoints', 'accesspoint')
-      .where('entity.id = :entityId', { entityId })
-      .select('building.id', 'id')
-      .addSelect('building.name', 'name')
-      .addSelect('COUNT(accesspoint.id)', 'apAll')
-      .addSelect(
-        `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
-        'apMaintain',
-      )
-      .addSelect(
-        `COUNT(CASE WHEN accesspoint.Status = 'down' THEN 1 END)`,
-        'apDown',
-      )
-      .addSelect('SUM(accesspoint.numberClient)', 'user1')
-      .addSelect('SUM(accesspoint.numberClient_2)', 'user2')
-      .groupBy('building.id')
-      .addGroupBy('building.name')
-      .getRawMany();
-  }
+  // async findBuildingWithApCount(entityId: number) {
+  //   return this.buildingRepository
+  //     .createQueryBuilder('building')
+  //     .leftJoin('building.entity', 'entity')
+  //     .leftJoin('building.accesspoints', 'accesspoint')
+  //     .where('entity.id = :entityId', { entityId })
+  //     .select('building.id', 'id')
+  //     .addSelect('building.name', 'name')
+  //     .addSelect('COUNT(accesspoint.id)', 'apAll')
+  //     .addSelect(
+  //       `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
+  //       'apMaintain',
+  //     )
+  //     .addSelect(
+  //       `COUNT(CASE WHEN accesspoint.Status = 'down' THEN 1 END)`,
+  //       'apDown',
+  //     )
+  //     .addSelect('SUM(accesspoint.numberClient)', 'user1')
+  //     .addSelect('SUM(accesspoint.numberClient_2)', 'user2')
+  //     .groupBy('building.id')
+  //     .addGroupBy('building.name')
+  //     .getRawMany();
+  // }
 
   // async getBuildingOverview(
   //   sectionId: number,
@@ -147,7 +147,7 @@ export class BuildingsService {
           `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
           'c6Count',
         )
-        .where('building.id = :id', { id: buildingId })
+        .where('building.id = :buildingId', { buildingId })
         .andWhere('entity.id = :entityId', { entityId })
         .andWhere('section.id = :sectionId', { sectionId })
         .andWhere('configuration.id IS NOT NULL')
@@ -170,8 +170,6 @@ export class BuildingsService {
         .select([
           'building.id',
           'building.name',
-          'entity.id',
-          'entity.name',
           'location.id',
           'location.name',
           'configuration',
@@ -180,7 +178,7 @@ export class BuildingsService {
           'ip.id',
           'ip.ip',
         ])
-        .where('building.id = :id', { id: buildingId })
+        .where('building.id = :buildingId', { buildingId })
         .andWhere('entity.id = :entityId', { entityId })
         .andWhere('section.id = :sectionId', { sectionId })
         .andWhere('configuration.id IS NOT NULL')
@@ -192,7 +190,6 @@ export class BuildingsService {
     return {
       id: building.id,
       name: building.name,
-      entity: building.entity,
       configurations: building.locations.flatMap((location) =>
         location.configuration
           ? [

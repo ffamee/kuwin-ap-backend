@@ -15,11 +15,11 @@ import { BuildingsService } from '../buildings/buildings.service';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { Building } from '../buildings/entities/building.entity';
 import { UpdateEntityDto } from './dto/update-entity.dto';
-import { Section } from 'src/section/entities/section.entity';
+import { Section } from '../section/entities/section.entity';
 import { ConfigService } from '@nestjs/config';
 import { deleteFile, saveFile } from 'src/shared/utils/file-system';
 import { InfluxService } from 'src/influx/influx.service';
-
+import { RawEntity, OutputEntity } from '../shared/types/entity-raw.sql';
 @Injectable()
 export class EntitiesService {
   constructor(
@@ -116,42 +116,215 @@ export class EntitiesService {
       .getRawMany();
   }
 
-  async getEntityOverview(sectionId: number, entityId: number) {
-    const entity = await this.entityRepository.findOne({
-      where: { id: entityId, section: { id: sectionId } },
-    });
-    if (!entity) {
-      throw new NotFoundException(
-        `Entity with sectionId ${sectionId} and entityId ${entityId} not found`,
-      );
-    }
-    const [
-      apAll,
-      apMaintain,
-      apDown,
-      totalUser,
-      buildings,
-      accesspoints,
-      dynamic,
-    ] = await Promise.all([
-      this.accesspointsService.countAPInEntity(entityId),
-      this.accesspointsService.countAPMaintainInEntity(entityId),
-      this.accesspointsService.countAPDownInEntity(entityId),
-      this.accesspointsService.sumAllClientInEntity(entityId),
-      this.buildingsService.findBuildingWithApCount(entityId),
-      this.accesspointsService.findOverviewApInEntityGroupByBuilding(entityId),
-      this.influxService.findOneEntity(sectionId, entityId),
+  // async getEntityOverview(sectionId: number, entityId: number) {
+  //   const entity = await this.entityRepository.findOne({
+  //     where: { id: entityId, section: { id: sectionId } },
+  //   });
+  //   if (!entity) {
+  //     throw new NotFoundException(
+  //       `Entity with sectionId ${sectionId} and entityId ${entityId} not found`,
+  //     );
+  //   }
+  // const [
+  //   apAll,
+  //   apMaintain,
+  //   apDown,
+  //   totalUser,
+  //   buildings,
+  //   accesspoints,
+  //   dynamic,
+  // ] = await Promise.all([
+  // this.accesspointsService.countAPInEntity(entityId),
+  // this.accesspointsService.countAPMaintainInEntity(entityId),
+  // this.accesspointsService.countAPDownInEntity(entityId),
+  // this.accesspointsService.sumAllClientInEntity(entityId),
+  // this.buildingsService.findBuildingWithApCount(entityId),
+  // this.accesspointsService.findOverviewApInEntityGroupByBuilding(entityId),
+  // this.influxService.findOneEntity(sectionId, entityId),
+  // ]);
+  //   return {
+  //     id: entity.id,
+  //     name: entity.name,
+  //     apAll,
+  //     apMaintain,
+  //     apDown,
+  //     totalUser,
+  //     buildings,
+  //     accesspoints,
+  //     dynamic,
+  //   };
+  // }
+
+  async find(sectionId: number, entityId: number) {
+    const [entity, num, numEach] = await Promise.all([
+      this.entityRepository
+        .query(
+          `
+				SELECT e.id AS entity_id, e.name AS entity_name, b.id AS building_id, b.name AS building_name,
+					loc.location_id , loc.location_name , loc.configuration_id , loc.created_at , loc.last_seen_at ,
+					loc.state , loc.status , loc.client_24 , loc.client_5 , loc.client_6 , loc.rx , loc.tx ,
+					a.ap_id AS accesspoint_id, a.Name AS accesspoint_name,
+					i.id AS ip_id, i.ip_address
+				FROM entity e
+				LEFT JOIN section s ON s.id = e.sectionId
+				LEFT JOIN building b on b.entityId = e.id
+				LEFT JOIN (
+					SELECT l.id AS location_id, l.location_name, l.buildingId AS location_building_id,
+						c.id AS configuration_id, c.created_at, c.last_seen_at, c.state, c.status,
+						c.client_24 , c.client_5, c.client_6, c.rx , c.tx,
+						c.accesspointId, c.ipId
+					FROM location l
+					INNER JOIN configuration c ON c.locationId = l.id ) loc ON loc.location_building_id = b.id
+				LEFT JOIN accesspoint a ON loc.accesspointId  = a.ap_id
+				LEFT JOIN ip i ON loc.ipId = i.id
+				WHERE e.id = ? AND s.id = ?`,
+          [entityId, sectionId],
+        )
+        .then((raws: RawEntity[]) =>
+          raws.reduce((acc, row) => {
+            acc.id = row.entity_id;
+            acc.name = row.entity_name;
+            if (!acc.buildings) {
+              acc.buildings = [];
+            }
+            if (row.building_id && row.building_name) {
+              let existingBuilding = acc.buildings.find(
+                (b) => b.id === row.building_id,
+              );
+              if (!existingBuilding) {
+                existingBuilding = {
+                  id: row.building_id,
+                  name: row.building_name,
+                  configurations: [],
+                };
+                acc.buildings.push(existingBuilding);
+              }
+              if (
+                row.configuration_id &&
+                row.created_at &&
+                row.last_seen_at &&
+                row.state
+              ) {
+                existingBuilding.configurations.push({
+                  id: row.configuration_id,
+                  createdAt: row.created_at,
+                  lastSeenAt: row.last_seen_at,
+                  state: row.state,
+                  status: row.status,
+                  client24: row.client_24,
+                  client5: row.client_5,
+                  client6: row.client_6,
+                  rx: row.rx,
+                  tx: row.tx,
+                  accesspoint:
+                    row.accesspoint_id && row.accesspoint_name
+                      ? { id: row.accesspoint_id, name: row.accesspoint_name }
+                      : null,
+                  ip:
+                    row.ip_id && row.ip_address
+                      ? { id: row.ip_id, ip: row.ip_address }
+                      : null,
+                  location:
+                    row.location_id && row.location_name
+                      ? {
+                          id: row.location_id,
+                          name: row.location_name,
+                        }
+                      : null,
+                });
+              }
+            }
+            return acc;
+          }, {} as OutputEntity),
+        ),
+      this.entityRepository
+        .createQueryBuilder('entity')
+        .leftJoin('entity.section', 'section')
+        .leftJoin('entity.buildings', 'building')
+        .leftJoin('building.locations', 'location')
+        .leftJoin('location.configuration', 'configuration')
+        .select(`COUNT(configuration.id)`, 'configCount')
+        .addSelect(
+          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
+          'downCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
+          'maCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
+          'c24Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
+          'c5Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
+          'c6Count',
+        )
+        .where('entity.id = :entityId', { entityId })
+        .andWhere('section.id = :sectionId', { sectionId })
+        .getRawOne<{
+          configCount: number;
+          downCount: number;
+          maCount: number;
+          c24Count: number;
+          c5Count: number;
+          c6Count: number;
+        }>(),
+      this.entityRepository
+        .createQueryBuilder('entity')
+        .leftJoin('entity.section', 'section')
+        .leftJoin('entity.buildings', 'building')
+        .leftJoin('building.locations', 'location')
+        .leftJoin('location.configuration', 'configuration')
+        .select('building.id', 'buildingId')
+        .addSelect(`COUNT(configuration.id)`, 'configCount')
+        .addSelect(
+          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
+          'downCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
+          'maCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
+          'c24Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
+          'c5Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
+          'c6Count',
+        )
+        .where('entity.id = :entityId', { entityId })
+        .andWhere('section.id = :sectionId', { sectionId })
+        .groupBy('building.id')
+        .getRawMany<{
+          buildingId: number;
+          configCount: number;
+          downCount: number;
+          maCount: number;
+          c24Count: number;
+          c5Count: number;
+          c6Count: number;
+        }>(),
     ]);
+
     return {
-      id: entity.id,
-      name: entity.name,
-      apAll,
-      apMaintain,
-      apDown,
-      totalUser,
-      buildings,
-      accesspoints,
-      dynamic,
+      ...entity,
+      buildings: entity.buildings.flatMap((building) => {
+        const e = numEach.find((b) => b.buildingId === building.id);
+        const { buildingId: _, ...rest } = e || {};
+        if (e) return { ...building, ...rest };
+        return building;
+      }),
+      ...num,
     };
   }
 

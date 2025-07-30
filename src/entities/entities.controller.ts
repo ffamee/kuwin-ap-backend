@@ -137,8 +137,13 @@ export class EntitiesController {
     @Query('sec') sectionId: string,
     @Query('entity') entityId: string,
   ) {
-    return this.entitiesService.getEntityOverview(+sectionId, +entityId);
+    return this.entitiesService.find(+sectionId, +entityId);
   }
+
+  // @Get('find/:id')
+  // find(@Param('id') id: string) {
+  //   return this.entitiesService.find(+id);
+  // }
 
   @ApiOperation({
     summary: 'Get all entities for each section',
