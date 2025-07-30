@@ -35,6 +35,14 @@ export class Configuration {
   })
   state: ConfigState;
 
+  @Column('varchar', {
+    name: 'mismatch_reason',
+    length: 31,
+    nullable: true,
+    default: null,
+  })
+  mismatchReason: string | null;
+
   @Column('bigint', {
     name: 'tx',
     nullable: true,

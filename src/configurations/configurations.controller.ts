@@ -3,8 +3,8 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Post,
+  Query,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
@@ -17,9 +17,24 @@ import { memoryStorage } from 'multer';
 export class ConfigurationsController {
   constructor(private readonly configurationsService: ConfigurationsService) {}
 
-  @Get(':id')
-  findOne(@Param('id') id: number) {
-    return this.configurationsService.findOne(id);
+  @Get('all')
+  getAll() {
+    return this.configurationsService.getAll();
+  }
+
+  @Get('down')
+  getDown() {
+    return this.configurationsService.getDown();
+  }
+
+  @Get('location')
+  getDetail(
+    @Query('sec') sec: string,
+    @Query('entity') entity: string,
+    @Query('build') build: string,
+    @Query('loc') loc: string,
+  ) {
+    return this.configurationsService.getDetail(+sec, +entity, +build, +loc);
   }
 
   @Post('create')

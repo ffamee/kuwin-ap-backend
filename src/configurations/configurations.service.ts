@@ -6,10 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Configuration } from './entities/configuration.entity';
-import { DataSource, Repository } from 'typeorm';
+import { Brackets, DataSource, Repository } from 'typeorm';
 import { IpService } from '../ip/ip.service';
 import { CreateConfigurationDto } from './dto/create-configuration.dto';
 import { LocationsService } from '../locations/locations.service';
+import { ConfigState, StatusState } from 'src/shared/types/define-state';
 
 @Injectable()
 export class ConfigurationsService {
@@ -77,9 +78,55 @@ export class ConfigurationsService {
     }
   }
 
-  async findOne(id: number): Promise<Configuration> {
+  async getAll() {
+    return this.configurationsRepository.find({
+      relations: ['ip', 'location', 'accesspoint'],
+      select: {
+        ip: { id: true, ip: true },
+        location: {
+          id: true,
+          name: true,
+        },
+        accesspoint: { id: true, name: true },
+      },
+    });
+  }
+
+  async getDown() {
+    return this.configurationsRepository
+      .createQueryBuilder('configuration')
+      .leftJoin('configuration.accesspoint', 'accesspoint')
+      .leftJoin('configuration.location', 'location')
+      .leftJoin('configuration.ip', 'ip')
+      .where(`configuration.state != 'PENDING'`)
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where('configuration.status IN (:down , :download)', {
+            down: StatusState.Down,
+            download: StatusState.Download,
+          })
+            .orWhere('configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE')
+            .orWhere('configuration.state = :state', {
+              state: ConfigState.Maintenance,
+            });
+        }),
+      )
+      .getMany();
+  }
+
+  async getDetail(
+    sec: number,
+    entity: number,
+    build: number,
+    loc: number,
+  ): Promise<Configuration> {
     const configuration = await this.configurationsRepository.findOne({
-      where: { id },
+      where: {
+        location: {
+          id: loc,
+          building: { id: build, entity: { id: entity, section: { id: sec } } },
+        },
+      },
       relations: ['ip', 'location', 'location.building', 'accesspoint'],
       select: {
         ip: { id: true, ip: true },
@@ -92,7 +139,9 @@ export class ConfigurationsService {
       },
     });
     if (!configuration) {
-      throw new NotFoundException(`Configuration with ID ${id} not found`);
+      throw new NotFoundException(
+        `Configuration in location ID ${loc} not found`,
+      );
     }
     return configuration;
   }
