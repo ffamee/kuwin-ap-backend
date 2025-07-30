@@ -10,7 +10,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Not, Repository } from 'typeorm';
 import { Building } from './entities/building.entity';
 import { EntitiesService } from '../entities/entities.service';
-import { AccesspointsService } from '../accesspoints/accesspoints.service';
 import { CreateBuildingDto } from './dto/create-building.dto';
 import { UpdateBuildingDto } from './dto/update-building.dto';
 import { ConfigService } from '@nestjs/config';
@@ -24,13 +23,12 @@ export class BuildingsService {
   constructor(
     private dataSource: DataSource,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => InfluxService))
     private readonly influxService: InfluxService,
     @InjectRepository(Building)
     private buildingRepository: Repository<Building>,
     @Inject(forwardRef(() => EntitiesService))
     private readonly entityService: EntitiesService,
-    @Inject(forwardRef(() => AccesspointsService))
-    private readonly accesspointsService: AccesspointsService,
   ) {}
 
   findAll(): Promise<Building[]> {
@@ -43,81 +41,11 @@ export class BuildingsService {
     });
   }
 
-  // async findBuildingWithApCount(entityId: number) {
-  //   return this.buildingRepository
-  //     .createQueryBuilder('building')
-  //     .leftJoin('building.entity', 'entity')
-  //     .leftJoin('building.accesspoints', 'accesspoint')
-  //     .where('entity.id = :entityId', { entityId })
-  //     .select('building.id', 'id')
-  //     .addSelect('building.name', 'name')
-  //     .addSelect('COUNT(accesspoint.id)', 'apAll')
-  //     .addSelect(
-  //       `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
-  //       'apMaintain',
-  //     )
-  //     .addSelect(
-  //       `COUNT(CASE WHEN accesspoint.Status = 'down' THEN 1 END)`,
-  //       'apDown',
-  //     )
-  //     .addSelect('SUM(accesspoint.numberClient)', 'user1')
-  //     .addSelect('SUM(accesspoint.numberClient_2)', 'user2')
-  //     .groupBy('building.id')
-  //     .addGroupBy('building.name')
-  //     .getRawMany();
-  // }
-
-  // async getBuildingOverview(
-  //   sectionId: number,
-  //   entityId: number,
-  //   buildingId: number,
-  // ) {
-  //   const building = await this.buildingRepository.findOne({
-  //     where: {
-  //       id: buildingId,
-  //       entity: { id: entityId, section: { id: sectionId } },
-  //     },
-  //     relations: ['accesspoints', 'entity'],
-  //     select: {
-  //       entity: { name: true, id: true },
-  //       accesspoints: {
-  //         id: true,
-  //         name: true,
-  //         status: true,
-  //         ip: true,
-  //         location: true,
-  //         problem: true,
-  //         numberClient: true,
-  //         numberClient_2: true,
-  //         wlcActive: true,
-  //         wlc: true,
-  //       },
-  //     },
-  //   });
-  //   if (!building) {
-  //     throw new NotFoundException(`Building with id ${buildingId} not found`);
-  //   }
-  // const [apAll, apMaintain, apDown, totalUser, dynamic] = await Promise.all([
-  // this.accesspointsService.countAPInBuilding(buildingId),
-  // this.accesspointsService.countAPMaintainInBuilding(buildingId),
-  // this.accesspointsService.countAPDownInBuilding(buildingId),
-  // this.accesspointsService.sumAllClientInBuilding(buildingId),
-  // this.influxService.findOneBuilding(sectionId, entityId, buildingId),
-  // ]);
-  //   return {
-  //     id: building.id,
-  //     name: building.name,
-  //     apAll,
-  //     apMaintain,
-  //     apDown,
-  //     totalUser,
-  //     accesspoints: building.accesspoints,
-  //     entity: building.entity,
-  //     dynamic,
-  //   };
-  // }
-
-  async find(sectionId: number, entityId: number, buildingId: number) {
+  async getBuildingOverview(
+    sectionId: number,
+    entityId: number,
+    buildingId: number,
+  ) {
     // join location and then join location to configuration and count *
     const [num, building] = await Promise.all([
       this.buildingRepository

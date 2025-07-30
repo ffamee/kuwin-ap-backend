@@ -96,4 +96,38 @@ export class ConfigurationsService {
     }
     return configuration;
   }
+
+  async countAll() {
+    return this.configurationsRepository
+      .createQueryBuilder('configuration')
+      .select(`COUNT(configuration.id)`, 'configCount')
+      .addSelect(
+        `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
+        'downCount',
+      )
+      .addSelect(
+        `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
+        'maCount',
+      )
+      .addSelect(
+        `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
+        'c24Count',
+      )
+      .addSelect(
+        `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
+        'c5Count',
+      )
+      .addSelect(
+        `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
+        'c6Count',
+      )
+      .getRawOne<{
+        configCount: number;
+        downCount: number;
+        maCount: number;
+        c24Count: number;
+        c5Count: number;
+        c6Count: number;
+      }>();
+  }
 }

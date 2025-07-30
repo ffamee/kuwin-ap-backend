@@ -10,23 +10,20 @@ import { Section } from './entities/section.entity';
 import { DataSource, Not, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateSectionDto } from './dto/create-section.dto';
-import { AccesspointsService } from '../accesspoints/accesspoints.service';
-import { EntitiesService } from '../entities/entities.service';
 import { Entity } from '../entities/entities/entity.entity';
 import { UpdateSectionDto } from './dto/update-section.dto';
-import { InfluxService } from 'src/influx/influx.service';
+import { InfluxService } from '../influx/influx.service';
+import { ConfigurationsService } from '../configurations/configurations.service';
 
 @Injectable()
 export class SectionService {
   constructor(
     private dataSource: DataSource,
+    @Inject(forwardRef(() => InfluxService))
     private readonly influxService: InfluxService,
+    private readonly configurationsService: ConfigurationsService,
     @InjectRepository(Section)
     private sectionRepository: Repository<Section>,
-    @Inject(forwardRef(() => AccesspointsService))
-    private readonly accesspointsService: AccesspointsService,
-    @Inject(forwardRef(() => EntitiesService))
-    private readonly entitiesService: EntitiesService,
   ) {}
 
   findAll(): Promise<Section[]> {
@@ -173,61 +170,7 @@ export class SectionService {
     return sections;
   }
 
-  // async getSectionOverview(sectionId: number) {
-  //   const section = await this.sectionRepository.findOne({
-  //     where: { id: sectionId },
-  //   });
-  //   if (!section) {
-  //     throw new NotFoundException(`SectionId ${sectionId} not found`);
-  //   }
-  // const [apAll, apMaintain, apDown, totalUser, entities, dynamic] =
-  //   await Promise.all([
-  // this.accesspointsService.countAPInSection(sectionId),
-  // this.accesspointsService.countAPMaintainInSection(sectionId),
-  // this.accesspointsService.countAPDownInSection(sectionId),
-  // this.accesspointsService.sumAllClientInSection(sectionId),
-  // this.entitiesService.findEntitiesWithApCount(sectionId),
-  // this.influxService.findOneSection(sectionId),
-  // ]);
-  // table => name, ap in entity, ap maintain in entity, ap down in entity, total user in entity, wlc in entity
-  //   const data = dynamic as {
-  //     'client-2.4': number;
-  //     'client-5': number;
-  //     'client-6': number;
-  //     rx: number;
-  //     tx: number;
-  //   }[];
-  //   const defaulttt = data.reduce(
-  //     (acc, cur) => {
-  //       acc['client-2.4'] += cur['client-2.4'];
-  //       acc['client-5'] += cur['client-5'];
-  //       acc['client-6'] += cur['client-6'];
-  //       acc.rx += cur.rx;
-  //       acc.tx += cur.tx;
-  //       return acc;
-  //     },
-  //     {
-  //       'client-2.4': 0,
-  //       'client-5': 0,
-  //       'client-6': 0,
-  //       rx: 0,
-  //       tx: 0,
-  //     },
-  //   );
-  //   return {
-  //     id: section.id,
-  //     name: section.name,
-  //     apAll,
-  //     apMaintain,
-  //     apDown,
-  //     totalUser,
-  //     entities,
-  //     dynamic,
-  //     default: defaulttt,
-  //   };
-  // }
-
-  async find(sectionId: number) {
+  async getSectionOverview(sectionId: number) {
     const [section, num, numEach] = await Promise.all([
       this.sectionRepository.findOne({
         where: { id: sectionId },
@@ -338,46 +281,59 @@ export class SectionService {
     };
   }
 
-  async findAllOverview() {
-    return this.sectionRepository
-      .createQueryBuilder('section')
-      .leftJoin('section.entities', 'entity')
-      .leftJoin('entity.buildings', 'building')
-      .leftJoin('building.accesspoints', 'accesspoint')
-      .where('section.id != :id', { id: 4 })
-      .select('section.id', 'id')
-      .addSelect('section.name', 'name')
-      .addSelect('COUNT(accesspoint.id)', 'apAll')
-      .addSelect(
-        `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
-        'apMaintain',
-      )
-      .addSelect(
-        `COUNT(CASE WHEN accesspoint.Status = 'down' THEN 1 END)`,
-        'apDown',
-      )
-      .addSelect('SUM(accesspoint.numberClient)', 'user1')
-      .addSelect('SUM(accesspoint.numberClient_2)', 'user2')
-      .groupBy('section.id')
-      .addGroupBy('section.name')
-      .getRawMany();
-  }
-
-  async getMonitorOverview() {
-    const [apAll, apMaintain, apDown, totalUser, sections] = await Promise.all([
-      this.accesspointsService.countAllAP(),
-      this.accesspointsService.countAllAPMaintain(),
-      this.accesspointsService.countAllAPDown(),
-      this.accesspointsService.sumAllClient(),
-      this.findAllOverview(),
+  async getMonitor() {
+    const [sections, num, numEach] = await Promise.all([
+      this.sectionRepository.find({ select: { id: true, name: true } }),
+      this.configurationsService.countAll(),
+      this.sectionRepository
+        .createQueryBuilder('section')
+        .leftJoin('section.entities', 'entity')
+        .leftJoin('entity.buildings', 'building')
+        .leftJoin('building.locations', 'location')
+        .leftJoin('location.configuration', 'configuration')
+        .leftJoin('configuration.accesspoint', 'accesspoint')
+        .leftJoin('configuration.ip', 'ip')
+        .select('section.id', 'sectionId')
+        .addSelect(`COUNT(configuration.id)`, 'configCount')
+        .addSelect(
+          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
+          'downCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
+          'maCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
+          'c24Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
+          'c5Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
+          'c6Count',
+        )
+        .groupBy('section.id')
+        .getRawMany<{
+          sectionId: number;
+          configCount: number;
+          downCount: number;
+          maCount: number;
+          c24Count: number;
+          c5Count: number;
+          c6Count: number;
+        }>(),
     ]);
-
     return {
-      apAll,
-      apMaintain,
-      apDown,
-      totalUser,
-      sections,
+      sections: sections.flatMap((section) => {
+        const s = numEach.find((s) => s.sectionId === section.id);
+        const { sectionId: _, ...rest } = s || {};
+        if (s) return { ...section, ...rest };
+        return section;
+      }),
+      ...num,
     };
   }
 }

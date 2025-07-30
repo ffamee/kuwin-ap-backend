@@ -31,5 +31,6 @@ import { join } from 'path';
   ],
   controllers: [ConfigurationsController],
   providers: [ConfigurationsService],
+  exports: [ConfigurationsService],
 })
 export class ConfigurationsModule {}

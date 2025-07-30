@@ -26,8 +26,8 @@ export class SectionController {
   constructor(private readonly sectionService: SectionService) {}
 
   @Get('monitor')
-  getMonitorOverview() {
-    return this.sectionService.getMonitorOverview();
+  getMonitor() {
+    return this.sectionService.getMonitor();
   }
 
   @ApiOperation({
@@ -118,13 +118,8 @@ export class SectionController {
   })
   @Get('overview')
   getOverview(@Query('sec') sectionId: string) {
-    return this.sectionService.find(+sectionId);
+    return this.sectionService.getSectionOverview(+sectionId);
   }
-
-  // @Get(':id')
-  // find(@Param('id') id: string) {
-  //   return this.sectionService.find(+id);
-  // }
 
   @ApiOperation({
     summary: 'Get all sections without *others',

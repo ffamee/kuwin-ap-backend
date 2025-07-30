@@ -4,8 +4,6 @@ import { EntitiesController } from './entities.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Entity } from './entities/entity.entity';
 import { SectionModule } from '../section/section.module';
-import { AccesspointsModule } from '../accesspoints/accesspoints.module';
-import { BuildingsModule } from 'src/buildings/buildings.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { join } from 'path';
@@ -15,9 +13,7 @@ import { InfluxModule } from 'src/influx/influx.module';
   imports: [
     TypeOrmModule.forFeature([Entity]),
     forwardRef(() => SectionModule),
-    forwardRef(() => BuildingsModule),
-    forwardRef(() => AccesspointsModule),
-    InfluxModule,
+    forwardRef(() => InfluxModule),
     MulterModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
