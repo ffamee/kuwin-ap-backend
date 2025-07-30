@@ -173,57 +173,168 @@ export class SectionService {
     return sections;
   }
 
-  async getSectionOverview(sectionId: number) {
-    const section = await this.sectionRepository.findOne({
-      where: { id: sectionId },
-    });
-    if (!section) {
-      throw new NotFoundException(`SectionId ${sectionId} not found`);
+  // async getSectionOverview(sectionId: number) {
+  //   const section = await this.sectionRepository.findOne({
+  //     where: { id: sectionId },
+  //   });
+  //   if (!section) {
+  //     throw new NotFoundException(`SectionId ${sectionId} not found`);
+  //   }
+  // const [apAll, apMaintain, apDown, totalUser, entities, dynamic] =
+  //   await Promise.all([
+  // this.accesspointsService.countAPInSection(sectionId),
+  // this.accesspointsService.countAPMaintainInSection(sectionId),
+  // this.accesspointsService.countAPDownInSection(sectionId),
+  // this.accesspointsService.sumAllClientInSection(sectionId),
+  // this.entitiesService.findEntitiesWithApCount(sectionId),
+  // this.influxService.findOneSection(sectionId),
+  // ]);
+  // table => name, ap in entity, ap maintain in entity, ap down in entity, total user in entity, wlc in entity
+  //   const data = dynamic as {
+  //     'client-2.4': number;
+  //     'client-5': number;
+  //     'client-6': number;
+  //     rx: number;
+  //     tx: number;
+  //   }[];
+  //   const defaulttt = data.reduce(
+  //     (acc, cur) => {
+  //       acc['client-2.4'] += cur['client-2.4'];
+  //       acc['client-5'] += cur['client-5'];
+  //       acc['client-6'] += cur['client-6'];
+  //       acc.rx += cur.rx;
+  //       acc.tx += cur.tx;
+  //       return acc;
+  //     },
+  //     {
+  //       'client-2.4': 0,
+  //       'client-5': 0,
+  //       'client-6': 0,
+  //       rx: 0,
+  //       tx: 0,
+  //     },
+  //   );
+  //   return {
+  //     id: section.id,
+  //     name: section.name,
+  //     apAll,
+  //     apMaintain,
+  //     apDown,
+  //     totalUser,
+  //     entities,
+  //     dynamic,
+  //     default: defaulttt,
+  //   };
+  // }
+
+  async find(sectionId: number) {
+    const [section, num, numEach] = await Promise.all([
+      this.sectionRepository.findOne({
+        where: { id: sectionId },
+        relations: ['entities'],
+        select: {
+          id: true,
+          name: true,
+          entities: {
+            id: true,
+            name: true,
+          },
+        },
+      }),
+      this.sectionRepository
+        .createQueryBuilder('section')
+        .leftJoin('section.entities', 'entity')
+        .leftJoin('entity.buildings', 'building')
+        .leftJoin('building.locations', 'location')
+        .leftJoin('location.configuration', 'configuration')
+        .leftJoin('configuration.accesspoint', 'accesspoint')
+        .leftJoin('configuration.ip', 'ip')
+        .select(`COUNT(configuration.id)`, 'configCount')
+        .addSelect(
+          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
+          'downCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
+          'maCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
+          'c24Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
+          'c5Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
+          'c6Count',
+        )
+        .where('section.id = :sectionId', { sectionId })
+        .getRawOne<{
+          configCount: number;
+          downCount: number;
+          maCount: number;
+          c24Count: number;
+          c5Count: number;
+          c6Count: number;
+        }>(),
+      this.sectionRepository
+        .createQueryBuilder('section')
+        .leftJoin('section.entities', 'entity')
+        .leftJoin('entity.buildings', 'building')
+        .leftJoin('building.locations', 'location')
+        .leftJoin('location.configuration', 'configuration')
+        .leftJoin('configuration.accesspoint', 'accesspoint')
+        .leftJoin('configuration.ip', 'ip')
+        .select('entity.id', 'entityId')
+        .addSelect(`COUNT(configuration.id)`, 'configCount')
+        .addSelect(
+          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
+          'downCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
+          'maCount',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
+          'c24Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
+          'c5Count',
+        )
+        .addSelect(
+          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
+          'c6Count',
+        )
+        .where('section.id = :sectionId', { sectionId })
+        .groupBy('entity.id')
+        .getRawMany<{
+          entityId: number;
+          configCount: number;
+          downCount: number;
+          maCount: number;
+          c24Count: number;
+          c5Count: number;
+          c6Count: number;
+        }>(),
+    ]);
+    if (!section || !num || !numEach) {
+      throw new NotFoundException(`Section with id ${sectionId} not found`);
     }
-    const [apAll, apMaintain, apDown, totalUser, entities, dynamic] =
-      await Promise.all([
-        this.accesspointsService.countAPInSection(sectionId),
-        this.accesspointsService.countAPMaintainInSection(sectionId),
-        this.accesspointsService.countAPDownInSection(sectionId),
-        this.accesspointsService.sumAllClientInSection(sectionId),
-        this.entitiesService.findEntitiesWithApCount(sectionId),
-        this.influxService.findOneSection(sectionId),
-      ]);
-    // table => name, ap in entity, ap maintain in entity, ap down in entity, total user in entity, wlc in entity
-    const data = dynamic as {
-      'client-2.4': number;
-      'client-5': number;
-      'client-6': number;
-      rx: number;
-      tx: number;
-    }[];
-    const defaulttt = data.reduce(
-      (acc, cur) => {
-        acc['client-2.4'] += cur['client-2.4'];
-        acc['client-5'] += cur['client-5'];
-        acc['client-6'] += cur['client-6'];
-        acc.rx += cur.rx;
-        acc.tx += cur.tx;
-        return acc;
-      },
-      {
-        'client-2.4': 0,
-        'client-5': 0,
-        'client-6': 0,
-        rx: 0,
-        tx: 0,
-      },
-    );
     return {
-      id: section.id,
-      name: section.name,
-      apAll,
-      apMaintain,
-      apDown,
-      totalUser,
-      entities,
-      dynamic,
-      default: defaulttt,
+      ...{
+        ...section,
+        entities: section.entities.flatMap((entity) => {
+          const e = numEach.find((e) => e.entityId === entity.id);
+          const { entityId: _, ...rest } = e || {};
+          if (e) return { ...entity, ...rest };
+          return entity;
+        }),
+      },
+      ...num,
     };
   }
 

@@ -91,30 +91,30 @@ export class EntitiesService {
     return entities;
   }
 
-  async findEntitiesWithApCount(section: number) {
-    return this.entityRepository
-      .createQueryBuilder('entity')
-      .leftJoin('entity.section', 'section')
-      .leftJoin('entity.buildings', 'building')
-      .leftJoin('building.accesspoints', 'accesspoint')
-      .where('section.id = :section', { section })
-      .select('entity.id', 'id')
-      .addSelect('entity.name', 'name')
-      .addSelect('COUNT(accesspoint.id)', 'apAll')
-      .addSelect(
-        `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
-        'apMaintain',
-      )
-      .addSelect(
-        `COUNT(CASE WHEN accesspoint.Status = 'down' THEN 1 END)`,
-        'apDown',
-      )
-      .addSelect('SUM(accesspoint.numberClient)', 'user1')
-      .addSelect('SUM(accesspoint.numberClient_2)', 'user2')
-      .groupBy('entity.id')
-      .addGroupBy('entity.name')
-      .getRawMany();
-  }
+  // async findEntitiesWithApCount(section: number) {
+  //   return this.entityRepository
+  //     .createQueryBuilder('entity')
+  //     .leftJoin('entity.section', 'section')
+  //     .leftJoin('entity.buildings', 'building')
+  //     .leftJoin('building.accesspoints', 'accesspoint')
+  //     .where('section.id = :section', { section })
+  //     .select('entity.id', 'id')
+  //     .addSelect('entity.name', 'name')
+  //     .addSelect('COUNT(accesspoint.id)', 'apAll')
+  //     .addSelect(
+  //       `COUNT(CASE WHEN accesspoint.Status = 'ma' THEN 1 END)`,
+  //       'apMaintain',
+  //     )
+  //     .addSelect(
+  //       `COUNT(CASE WHEN accesspoint.Status = 'down' THEN 1 END)`,
+  //       'apDown',
+  //     )
+  //     .addSelect('SUM(accesspoint.numberClient)', 'user1')
+  //     .addSelect('SUM(accesspoint.numberClient_2)', 'user2')
+  //     .groupBy('entity.id')
+  //     .addGroupBy('entity.name')
+  //     .getRawMany();
+  // }
 
   // async getEntityOverview(sectionId: number, entityId: number) {
   //   const entity = await this.entityRepository.findOne({

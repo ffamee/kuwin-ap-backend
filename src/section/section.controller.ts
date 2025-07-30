@@ -118,8 +118,13 @@ export class SectionController {
   })
   @Get('overview')
   getOverview(@Query('sec') sectionId: string) {
-    return this.sectionService.getSectionOverview(+sectionId);
+    return this.sectionService.find(+sectionId);
   }
+
+  // @Get(':id')
+  // find(@Param('id') id: string) {
+  //   return this.sectionService.find(+id);
+  // }
 
   @ApiOperation({
     summary: 'Get all sections without *others',
