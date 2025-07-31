@@ -17,8 +17,8 @@ enum ConfigState {
 enum StatusState {
   Up = 'UP',
   Roff = 'RADIO_OFF',
-  Down = 'DOWN',
-  // Download = 'DOWNLOAD', // The access point is downloading a firmware
+  Down = 'DOWN', // The access point is not associated to switch
+  Download = 'DOWNLOAD', // The access point is downloading a firmware
 }
 
 export { ErrorState, ConfigState, StatusState };
