@@ -14,9 +14,9 @@ import { CreateBuildingDto } from './dto/create-building.dto';
 import { UpdateBuildingDto } from './dto/update-building.dto';
 import { ConfigService } from '@nestjs/config';
 import { deleteFile, saveFile } from 'src/shared/utils/file-system';
-import { Accesspoint } from 'src/accesspoints/entities/accesspoint.entity';
 import { Entity } from 'src/entities/entities/entity.entity';
 import { InfluxService } from 'src/influx/influx.service';
+import { Location } from 'src/locations/entities/location.entity';
 
 @Injectable()
 export class BuildingsService {
@@ -172,9 +172,9 @@ export class BuildingsService {
     if (!building) {
       throw new NotFoundException(`Building with ID ${id} not found`);
     }
-    if (building.accesspoints.length > 0) {
+    if (building.locations.length > 0) {
       throw new ConflictException(
-        `Cannot delete building with ID ${id} because it has associated access points.`,
+        `Cannot delete building with ID ${id} because it has associated locations.`,
       );
     }
     await deleteFile(building.pic ?? 'default.png');
@@ -193,7 +193,7 @@ export class BuildingsService {
         if (building) {
           await deleteFile(building.pic ?? 'default.png');
           await manager.update(
-            Accesspoint,
+            Location,
             { building: { id } },
             { building: { id: 290 } },
           );

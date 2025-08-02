@@ -6,7 +6,6 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Entity } from '../../entities/entities/entity.entity';
-import { Accesspoint } from '../../accesspoints/entities/accesspoint.entity';
 import { Location } from '../../locations/entities/location.entity';
 
 @TypeOrmEntity('building')
@@ -49,8 +48,8 @@ export class Building {
   })
   entity: Entity;
 
-  @OneToMany(() => Accesspoint, (accesspoint) => accesspoint.building)
-  accesspoints: Accesspoint[];
+  // @OneToMany(() => Accesspoint, (accesspoint) => accesspoint.building)
+  // accesspoints: Accesspoint[];
 
   @OneToMany(() => Location, (location) => location.building)
   locations: Location[];

@@ -1,417 +1,128 @@
 import {
-  forwardRef,
-  Inject,
+  ConflictException,
   Injectable,
-  NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Accesspoint } from './entities/accesspoint.entity';
-import { In, Not, Repository } from 'typeorm';
-import { BuildingsService } from '../buildings/buildings.service';
-import { ResponseAccesspointOverviewDto } from './dto/response-accesspoint.dto';
-import { InfluxService } from '../influx/influx.service';
+import { DataSource, EntityManager, Repository } from 'typeorm';
+import * as snmp from 'net-snmp';
+import { get } from 'src/shared/utils/snmp';
+// import { ErrorState } from 'src/shared/types/define-state';
 
 @Injectable()
 export class AccesspointsService {
   constructor(
+    private dataSource: DataSource,
     @InjectRepository(Accesspoint)
     private accesspointRepository: Repository<Accesspoint>,
-    @Inject(forwardRef(() => BuildingsService))
-    private readonly buildingsService: BuildingsService,
-    @Inject(forwardRef(() => InfluxService))
-    private readonly influxService: InfluxService,
   ) {}
 
-  findAll(): Promise<Accesspoint[]> {
-    return this.accesspointRepository.find({
-      select: {
-        id: true,
-        name: true,
-        ip: true,
-        status: true,
-        location: true,
-        numberClient: true,
-        numberClient_2: true,
-        wlcActive: true,
-        wlc: true,
-        building: {
-          id: true,
-          entity: {
-            id: true,
-            section: {
-              id: true,
-            },
-          },
-        },
-      },
-      relations: {
-        building: {
-          entity: {
-            section: true,
-          },
-        },
-      },
-    });
+  private macToDec(mac: string): string {
+    return mac
+      .split(':')
+      .map((octet) => parseInt(octet, 16))
+      .join('.');
   }
 
-  async findOne(id: number): Promise<any> {
-    const accesspoint = await this.accesspointRepository.findOne({
-      where: { id },
-      relations: {
-        building: {
-          entity: {
-            section: true,
-          },
-        },
-      },
-      select: {
-        building: {
-          name: true,
-          entity: { name: true, section: { name: true } },
-        },
-      },
-    });
-    // this.influxService.queryApLastPoint(),
-    if (!accesspoint) {
-      throw new NotFoundException(`Access point with id ${id} not found`);
-    }
-    return accesspoint;
-  }
-
-  async findAllApNameInBuilding(buildingId: number): Promise<Accesspoint[]> {
-    const building = await this.buildingsService.exist(buildingId);
-    if (!building) {
-      throw new NotFoundException('Building not found');
-    }
-    return this.accesspointRepository.find({
-      where: { buildingId },
-      select: {
-        id: true,
-        name: true,
-      },
-    });
-  }
-
-  async countAllAP(): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        building: {
-          entity: { section: { id: Not(4) } },
-        },
-      },
-    });
-  }
-
-  async countAllAPMaintain(): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        status: 'ma',
-        building: {
-          entity: { section: { id: Not(4) } },
-        },
-      },
-    });
-  }
-
-  async countAllAPDown(): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        status: 'down',
-        building: {
-          entity: { section: { id: Not(4) } },
-        },
-      },
-    });
-  }
-
-  async sumAllClient(): Promise<number> {
-    const [sumCl, sumCl2] = await Promise.all([
-      (await this.accesspointRepository.sum('numberClient', {
-        building: { entity: { section: { id: Not(4) } } },
-      })) ?? 0,
-      (await this.accesspointRepository.sum('numberClient_2', {
-        building: { entity: { section: { id: Not(4) } } },
-      })) ?? 0,
-    ]);
-    return sumCl + sumCl2;
-  }
-
-  async countAPInSection(section: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: { building: { entity: { section: { id: section } } } },
-    });
-  }
-
-  async countAPMaintainInSection(section: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        building: { entity: { section: { id: section } } },
-        status: 'ma',
-      },
-    });
-  }
-
-  async countAPDownInSection(section: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        building: { entity: { section: { id: section } } },
-        status: 'down',
-      },
-    });
-  }
-
-  async sumAllClientInSection(section: number): Promise<number> {
-    const [sumCl, sumCl2] = await Promise.all([
-      (await this.accesspointRepository.sum('numberClient', {
-        building: { entity: { section: { id: section } } },
-      })) ?? 0,
-      (await this.accesspointRepository.sum('numberClient_2', {
-        building: { entity: { section: { id: section } } },
-      })) ?? 0,
-    ]);
-    return sumCl + sumCl2;
-  }
-
-  async countAPInEntity(entityId: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: { building: { entity: { id: entityId } } },
-    });
-  }
-
-  async countAPMaintainInEntity(entityId: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        building: { entity: { id: entityId } },
-        status: 'ma',
-      },
-    });
-  }
-
-  async countAPDownInEntity(entityId: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        building: { entity: { id: entityId } },
-        status: 'down',
-      },
-    });
-  }
-
-  async countAPWithWlCInEntity(entityId: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        building: { entity: { id: entityId } },
-        wlc: Not('No'),
-      },
-    });
-  }
-
-  async sumAllClientInEntity(entityId: number): Promise<number> {
-    const [sumCl, sumCl2] = await Promise.all([
-      (await this.accesspointRepository.sum('numberClient', {
-        building: { entity: { id: entityId } },
-      })) ?? 0,
-      (await this.accesspointRepository.sum('numberClient_2', {
-        building: { entity: { id: entityId } },
-      })) ?? 0,
-    ]);
-    return sumCl + sumCl2;
-  }
-
-  async findOverviewApInEntityGroupByBuilding(
-    entityId: number,
-  ): Promise<Record<string, ResponseAccesspointOverviewDto[]>> {
-    const res = await this.accesspointRepository.find({
-      where: { building: { entity: { id: entityId } } },
-      select: {
-        id: true,
-        name: true,
-        ip: true,
-        status: true,
-        location: true,
-        numberClient: true,
-        numberClient_2: true,
-        building: {
-          id: true,
-        },
-      },
-      relations: {
-        building: true,
-      },
-    });
-    const accesspoints: Record<string, ResponseAccesspointOverviewDto[]> =
-      res.reduce(
-        (acc: Record<string, ResponseAccesspointOverviewDto[]>, r) => {
-          const { building, ...ap } = r;
-          const key = building.id.toString();
-          if (!acc[key]) acc[key] = [];
-          acc[key].push(ap);
-          return acc;
-        },
-        {} as Record<string, ResponseAccesspointOverviewDto[]>,
+  private async create(manager: EntityManager, radMac: string) {
+    try {
+      const session = snmp.createSession('172.16.26.11', 'KUWINTEST', {
+        version: snmp.Version['2c'],
+      });
+      const decMac = this.macToDec(radMac);
+      const oids = [
+        '1.3.6.1.4.1.14179.2.2.1.1.3' + '.' + decMac, // ap name
+        '1.3.6.1.4.1.14179.2.2.1.1.16' + '.' + decMac, // model
+        '1.3.6.1.4.1.14179.2.2.1.1.17' + '.' + decMac, // serial
+        '1.3.6.1.4.1.14179.2.2.1.1.31' + '.' + decMac, // ios version
+        '1.3.6.1.4.1.14179.2.2.1.1.33' + '.' + decMac, // eth mac
+      ];
+      const [name, model, serial, ios, ethMac] = await Promise.all(
+        oids.map((oid) => get(session, oid)),
       );
-    return accesspoints;
-  }
-
-  async countAPInBuilding(buildingId: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: { building: { id: buildingId } },
-    });
-  }
-
-  async countAPMaintainInBuilding(buildingId: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        building: { id: buildingId },
-        status: 'ma',
-      },
-    });
-  }
-
-  async countAPDownInBuilding(buildingId: number): Promise<number> {
-    return this.accesspointRepository.count({
-      where: {
-        building: { id: buildingId },
-        status: 'down',
-      },
-    });
-  }
-
-  async sumAllClientInBuilding(buildingId: number): Promise<number> {
-    const [sumCl, sumCl2] = await Promise.all([
-      (await this.accesspointRepository.sum('numberClient', {
-        building: { id: buildingId },
-      })) ?? 0,
-      (await this.accesspointRepository.sum('numberClient_2', {
-        building: { id: buildingId },
-      })) ?? 0,
-    ]);
-    return sumCl + sumCl2;
-  }
-
-  async getAccesspointDetail(
-    sectionId: number,
-    entityId: number,
-    buildingId: number,
-    apId: number,
-  ) {
-    if (
-      !(await this.accesspointRepository.exists({
-        where: {
-          id: apId,
-          building: {
-            id: buildingId,
-            entity: { id: entityId, section: { id: sectionId } },
-          },
-        },
-      }))
-    ) {
-      throw new NotFoundException(
-        `Access point with id ${apId} not found in section ${sectionId}, entity ${entityId}, building ${buildingId}`,
+      const ap = manager.create(Accesspoint, {
+        name: Buffer.from(name as string, 'utf-8').toString('utf-8'),
+        model: Buffer.from(model as string, 'utf-8').toString('utf-8'),
+        serial: Buffer.from(serial as string, 'utf-8').toString('utf-8'),
+        ios: Buffer.from(ios as string, 'utf-8').toString('utf-8'),
+        radMac: radMac,
+        ethMac: Buffer.from(ethMac as string, 'hex')
+          .toString('hex')
+          .replace(/(.{2})(?=.)/g, '$1:'),
+        latitude: '', // default value, can be updated later
+        longtitude: '', // default value, can be updated later
+        timestamp2: 0, // default value, can be updated later
+        channel_2: 0, // default value, can be updated later
+        clMax_2: 0, // default value, can be updated later
+        wlcActive: '', // default value, can be updated later
+      });
+      const res = await manager.save(ap);
+      if (res) {
+        return res;
+      }
+      throw new InternalServerErrorException(
+        'Failed to create access point, please try again later',
+      );
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error) {
+        if (error.code === 'ER_DUP_ENTRY')
+          throw new ConflictException(
+            'Access point already exists',
+            error.message,
+          );
+        else
+          throw new InternalServerErrorException(
+            'An unexpected error occurred while creating the access point',
+            error.message,
+          );
+      } else if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'An error occurred while creating the access point',
       );
     }
-    const [staticData, dynamicSata] = await Promise.all([
-      this.accesspointRepository.findOne({
-        where: {
-          id: apId,
-          building: {
-            id: buildingId,
-            entity: { id: entityId, section: { id: sectionId } },
-          },
-        },
-        relations: {
-          building: {
-            entity: {
-              section: true,
-            },
-          },
-        },
-        select: {
-          building: {
-            name: true,
-            entity: { name: true, section: { name: true } },
-          },
-        },
-      }),
-      this.influxService.findOneAp(sectionId, entityId, buildingId, apId),
-    ]);
-    return { staticData, dynamicSata };
   }
 
-  findAllDownAccesspoints(): Promise<Accesspoint[]> {
-    return this.accesspointRepository.find({
-      where: { status: In(['down', 'ma']) },
-      select: {
-        id: true,
-        name: true,
-        ip: true,
-        status: true,
-        location: true,
-        downtimeStart: true,
-        jobStatus: true,
-        building: {
-          id: true,
-          entity: {
-            id: true,
-            section: {
-              id: true,
-            },
-          },
-        },
-      },
-      relations: {
-        building: {
-          entity: {
-            section: true,
-          },
-        },
-      },
+  // function to get AP id by MAC address, if not exists, create it
+  async getAp(manager: EntityManager, radMac: string): Promise<number | null> {
+    const existingAp = await manager.findOne(Accesspoint, {
+      where: { radMac },
+      select: ['id'],
     });
-  }
-
-  existRadMac(mac: string): Promise<boolean> {
-    return this.accesspointRepository.exists({
-      where: { radMac: mac },
-    });
-  }
-
-  async findIdByRadMac(mac: string) {
-    const ids = await this.accesspointRepository.findOne({
-      select: {
-        id: true,
-        building: {
-          id: true,
-          entity: {
-            id: true,
-            section: {
-              id: true,
-            },
-          },
-        },
-      },
-      where: { radMac: mac },
-      relations: {
-        building: {
-          entity: {
-            section: true,
-          },
-        },
-      },
-    });
-    // reduce {id: 1, building: {id: 1, entity: {id: 1, section: {id: 1}}}} to { sectionId: 1, entityId: 1, buildingId: 1, apId: 1 	}
-    if (!ids) {
-      // throw new NotFoundException(`Access point with radMac ${mac} not found`);
-      return {
-        sectionId: { value: -1, type: 65 },
-        entityId: { value: -1, type: 65 },
-        buildingId: { value: -1, type: 65 },
-        apId: { value: -1, type: 65 },
-      };
+    if (existingAp) {
+      return existingAp.id;
+    } else {
+      const res = await this.create(manager, radMac);
+      if (res instanceof Accesspoint) {
+        return res.id;
+      }
+      console.error('Failed to create AP:', res);
+      return null;
     }
-    return {
-      sectionId: { value: ids.building.entity.section.id, type: 65 },
-      entityId: { value: ids.building.entity.id, type: 65 },
-      buildingId: { value: ids.building.id, type: 65 },
-      apId: { value: ids.id, type: 65 },
-    };
+  }
+
+  async test(mac: string) {
+    console.time('SNMP Test');
+    // const session = snmp.createSession('172.16.26.11', 'KUWINTEST', {
+    //   version: snmp.Version['2c'],
+    // });
+    // const decMac = this.macToDec(mac);
+    // const oids = [
+    //   '1.3.6.1.4.1.14179.2.2.1.1.3' + '.' + decMac, // ap name
+    //   '1.3.6.1.4.1.14179.2.2.1.1.16' + '.' + decMac, // model
+    //   '1.3.6.1.4.1.14179.2.2.1.1.17' + '.' + decMac, // serial
+    //   '1.3.6.1.4.1.14179.2.2.1.1.31' + '.' + decMac, // ios version
+    //   '1.3.6.1.4.1.14179.2.2.1.1.33' + '.' + decMac, // eth mac
+    // ];
+    // const [apName, model, serial, iosVersion, ethMac] = await Promise.all(
+    //   oids.map((oid) => get(session, oid)),
+    // );
+    // console.dir({ apName, model, serial, iosVersion, ethMac }, { depth: null });
+    // session.close();
+    const res = await this.create(this.dataSource.manager, mac);
+    console.dir(res, { depth: null });
+    console.timeEnd('SNMP Test');
   }
 }

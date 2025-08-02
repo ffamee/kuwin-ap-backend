@@ -1,0 +1,120 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+
+export class Editap1754127715454 implements MigrationInterface {
+    name = 'Editap1754127715454'
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP FOREIGN KEY \`FK_d7b27ccaab549b2b584ff588b04\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`buildingId\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`zone\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`WLC_active\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`WLC\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`TXBS\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`timestamp2\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`timestamp\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`Switch_Port_ID\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`Switch_IP\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`sum_cl\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`Status\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`RXBS\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`problem\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`picAP\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`OQD\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`Number_client_2\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`Number_client\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`Name\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`MA_ID\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`longtitude\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`Location\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`latitude\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`job_status\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`IQD\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`IP\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`install_time\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`grpMAN\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`grpBW\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`fac_id\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`Eq_Number\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`downtime_start\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`CTXBS\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`CRXBS\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`cl_max_2\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`cl_max\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`cl_avg\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`channel_2\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`channel\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`B_ID\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`name\` varchar(100) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`pic\` varchar(100) NOT NULL DEFAULT 'underconstruction.gif'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`owner\` varchar(100) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` CHANGE \`radMac\` \`radMac\` varchar(20) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD UNIQUE INDEX \`IDX_f4567a155a5afcd6c122561ddd\` (\`radMac\`)`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`ethMac\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`ethMac\` varchar(20) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD UNIQUE INDEX \`IDX_2a0921f74c88ea50eaefd74d87\` (\`ethMac\`)`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`model\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`model\` varchar(100) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`ios\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`ios\` varchar(100) NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`serial\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`serial\` varchar(100) NOT NULL`);
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`serial\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`serial\` varchar(12) NULL DEFAULT '-'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`ios\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`ios\` varchar(70) NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`model\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`model\` varchar(80) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP INDEX \`IDX_2a0921f74c88ea50eaefd74d87\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`ethMac\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`ethMac\` varchar(18) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP INDEX \`IDX_f4567a155a5afcd6c122561ddd\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` CHANGE \`radMac\` \`radMac\` varchar(20) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`owner\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`pic\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` DROP COLUMN \`name\``);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`B_ID\` int UNSIGNED NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`channel\` int UNSIGNED NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`channel_2\` int NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`cl_avg\` decimal(5,2) NOT NULL DEFAULT '0.00'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`cl_max\` int UNSIGNED NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`cl_max_2\` int NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`CRXBS\` int UNSIGNED NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`CTXBS\` int UNSIGNED NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`downtime_start\` datetime NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`Eq_Number\` varchar(50) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`fac_id\` int UNSIGNED NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`grpBW\` tinyint UNSIGNED NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`grpMAN\` tinyint UNSIGNED NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`install_time\` datetime NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`IP\` varchar(16) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`IQD\` int UNSIGNED NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`job_status\` char(20) NULL DEFAULT 'No'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`latitude\` varchar(25) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`Location\` varchar(150) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`longtitude\` varchar(25) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`MA_ID\` int NULL DEFAULT '1'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`Name\` varchar(100) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`Number_client\` int NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`Number_client_2\` int NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`OQD\` int UNSIGNED NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`picAP\` varchar(50) NOT NULL DEFAULT 'underconstruction.gif'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`problem\` varchar(150) NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`RXBS\` bigint UNSIGNED NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`Status\` varchar(8) NULL DEFAULT 'down'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`sum_cl\` varchar(100) NOT NULL DEFAULT ''`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`Switch_IP\` varchar(16) NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`Switch_Port_ID\` int NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`timestamp\` varchar(100) NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`timestamp2\` bigint UNSIGNED NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`TXBS\` bigint UNSIGNED NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`WLC\` enum ('Yes', 'No') NOT NULL DEFAULT 'No'`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`WLC_active\` varchar(25) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`zone\` varchar(100) NULL DEFAULT ''`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD \`buildingId\` int NULL`);
+        await queryRunner.query(`ALTER TABLE \`accesspoint\` ADD CONSTRAINT \`FK_d7b27ccaab549b2b584ff588b04\` FOREIGN KEY (\`buildingId\`) REFERENCES \`building\`(\`id\`) ON DELETE RESTRICT ON UPDATE CASCADE`);
+    }
+
+}
