@@ -8,7 +8,7 @@ import {
   Index,
   ManyToOne,
   PrimaryGeneratedColumn,
-  UpdateDateColumn,
+  // UpdateDateColumn,
   OneToMany,
   OneToOne,
 } from 'typeorm';
@@ -31,14 +31,22 @@ export class Location {
   })
   createdAt: Date;
 
-  @UpdateDateColumn({
+  // @UpdateDateColumn({
+  //   name: 'updated_at',
+  // })
+  @Column('datetime', {
     name: 'updated_at',
+    nullable: false,
+    precision: 6,
+    default: () => 'CURRENT_TIMESTAMP(6)',
+    onUpdate: 'CURRENT_TIMESTAMP(6)',
   })
   updatedAt: Date;
 
   @ManyToOne(() => Building, (building) => building.locations, {
     onDelete: 'RESTRICT',
     onUpdate: 'CASCADE',
+    nullable: false,
   })
   building: Building;
 

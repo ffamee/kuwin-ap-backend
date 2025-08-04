@@ -17,7 +17,15 @@ import { Section } from '../section/entities/section.entity';
 import { ConfigService } from '@nestjs/config';
 import { deleteFile, saveFile } from 'src/shared/utils/file-system';
 import { InfluxService } from 'src/influx/influx.service';
-import { RawEntity, OutputEntity } from '../shared/types/entity-raw.sql';
+import { RawEntity, OutputEntity } from '../shared/types/entity-raw.dto';
+import {
+  c24Count,
+  c5Count,
+  c6Count,
+  configCount,
+  downCount,
+  maCount,
+} from 'src/shared/sql-query/query';
 @Injectable()
 export class EntitiesService {
   constructor(
@@ -93,20 +101,20 @@ export class EntitiesService {
           `
 				SELECT e.id AS entity_id, e.name AS entity_name, b.id AS building_id, b.name AS building_name,
 					loc.location_id , loc.location_name , loc.configuration_id , loc.created_at , loc.last_seen_at ,
-					loc.state , loc.status , loc.client_24 , loc.client_5 , loc.client_6 , loc.rx , loc.tx ,
-					a.ap_id AS accesspoint_id, a.Name AS accesspoint_name,
+					loc.status , loc.client_24 , loc.client_5 , loc.client_6 , loc.rx , loc.tx ,
+					a.id AS accesspoint_id, a.name AS accesspoint_name,
 					i.id AS ip_id, i.ip_address
 				FROM entity e
 				LEFT JOIN section s ON s.id = e.sectionId
 				LEFT JOIN building b on b.entityId = e.id
 				LEFT JOIN (
 					SELECT l.id AS location_id, l.location_name, l.buildingId AS location_building_id,
-						c.id AS configuration_id, c.created_at, c.last_seen_at, c.state, c.status,
+						c.id AS configuration_id, c.created_at, c.last_seen_at, c.status,
 						c.client_24 , c.client_5, c.client_6, c.rx , c.tx,
 						c.accesspointId, c.ipId
 					FROM location l
 					INNER JOIN configuration c ON c.locationId = l.id ) loc ON loc.location_building_id = b.id
-				LEFT JOIN accesspoint a ON loc.accesspointId  = a.ap_id
+				LEFT JOIN accesspoint a ON loc.accesspointId  = a.id
 				LEFT JOIN ip i ON loc.ipId = i.id
 				WHERE e.id = ? AND s.id = ?`,
           [entityId, sectionId],
@@ -130,17 +138,11 @@ export class EntitiesService {
                 };
                 acc.buildings.push(existingBuilding);
               }
-              if (
-                row.configuration_id &&
-                row.created_at &&
-                row.last_seen_at &&
-                row.state
-              ) {
+              if (row.configuration_id && row.created_at && row.last_seen_at) {
                 existingBuilding.configurations.push({
                   id: row.configuration_id,
                   createdAt: row.created_at,
                   lastSeenAt: row.last_seen_at,
-                  state: row.state,
                   status: row.status,
                   client24: row.client_24,
                   client5: row.client_5,
@@ -167,34 +169,29 @@ export class EntitiesService {
             }
             return acc;
           }, {} as OutputEntity),
-        ),
+        )
+        .catch((error: unknown) => {
+          if (error instanceof Error) {
+            throw new InternalServerErrorException(
+              `Failed to fetch entity overview: ${error.message}`,
+            );
+          }
+          throw new InternalServerErrorException(
+            'Error occurred while fetching entity overview',
+          );
+        }),
       this.entityRepository
         .createQueryBuilder('entity')
         .leftJoin('entity.section', 'section')
         .leftJoin('entity.buildings', 'building')
         .leftJoin('building.locations', 'location')
         .leftJoin('location.configuration', 'configuration')
-        .select(`COUNT(configuration.id)`, 'configCount')
-        .addSelect(
-          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
-          'downCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
-          'maCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
-          'c24Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
-          'c5Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
-          'c6Count',
-        )
+        .select(configCount, 'configCount')
+        .addSelect(downCount, 'downCount')
+        .addSelect(maCount, 'maCount')
+        .addSelect(c24Count, 'c24Count')
+        .addSelect(c5Count, 'c5Count')
+        .addSelect(c6Count, 'c6Count')
         .where('entity.id = :entityId', { entityId })
         .andWhere('section.id = :sectionId', { sectionId })
         .getRawOne<{
@@ -212,27 +209,12 @@ export class EntitiesService {
         .leftJoin('building.locations', 'location')
         .leftJoin('location.configuration', 'configuration')
         .select('building.id', 'buildingId')
-        .addSelect(`COUNT(configuration.id)`, 'configCount')
-        .addSelect(
-          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
-          'downCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
-          'maCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
-          'c24Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
-          'c5Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
-          'c6Count',
-        )
+        .addSelect(configCount, 'configCount')
+        .addSelect(downCount, 'downCount')
+        .addSelect(maCount, 'maCount')
+        .addSelect(c24Count, 'c24Count')
+        .addSelect(c5Count, 'c5Count')
+        .addSelect(c6Count, 'c6Count')
         .where('entity.id = :entityId', { entityId })
         .andWhere('section.id = :sectionId', { sectionId })
         .groupBy('building.id')
@@ -246,8 +228,7 @@ export class EntitiesService {
           c6Count: number;
         }>(),
     ]);
-
-    if (!entity || !num || !numEach) {
+    if (!entity || Object.keys(entity).length === 0 || !num || !numEach) {
       throw new NotFoundException(
         `Entity with sectionId ${sectionId} and entityId ${entityId} not found`,
       );

@@ -1,10 +1,12 @@
 import {
   Column,
+  CreateDateColumn,
   Entity as EntityDecorator,
   // JoinColumn,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
+  // UpdateDateColumn,
 } from 'typeorm';
 import { Section } from '../../section/entities/section.entity';
 import { Building } from '../../buildings/entities/building.entity';
@@ -60,12 +62,30 @@ export class Entity {
   })
   pic: string;
 
+  @CreateDateColumn({
+    name: 'created_at',
+  })
+  createdAt: Date;
+
+  // @UpdateDateColumn({
+  //   name: 'updated_at',
+  // })
+  @Column('datetime', {
+    name: 'updated_at',
+    nullable: false,
+    precision: 6,
+    default: () => 'CURRENT_TIMESTAMP(6)',
+    onUpdate: 'CURRENT_TIMESTAMP(6)',
+  })
+  updatedAt: Date;
+
   // @Column('int', { name: 'sec_type_id' })
   // secId: number;
 
   @ManyToOne(() => Section, (section) => section.entities, {
     onDelete: 'RESTRICT',
     onUpdate: 'CASCADE',
+    nullable: false,
   })
   // @JoinColumn({ name: 'sec_type_id' })
   section: Section;

@@ -8,12 +8,14 @@ import { LocationsModule } from '../locations/locations.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { join } from 'path';
+import { AccesspointsModule } from 'src/accesspoints/accesspoints.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Configuration]),
     IpModule,
     LocationsModule,
+    AccesspointsModule,
     MulterModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

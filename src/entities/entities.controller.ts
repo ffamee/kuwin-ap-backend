@@ -226,7 +226,7 @@ export class EntitiesController {
       createEntity: {
         value: {
           name: 'New Entity',
-          section: 1, // 1 for faculty, 2 for organization, 3 for dormitory
+          sectionId: 1, // 1 for faculty, 2 for organization, 3 for dormitory
         },
       },
     },

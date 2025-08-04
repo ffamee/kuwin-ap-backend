@@ -14,6 +14,14 @@ import { Entity } from '../entities/entities/entity.entity';
 import { UpdateSectionDto } from './dto/update-section.dto';
 import { InfluxService } from '../influx/influx.service';
 import { ConfigurationsService } from '../configurations/configurations.service';
+import {
+  c24Count,
+  c5Count,
+  c6Count,
+  configCount,
+  downCount,
+  maCount,
+} from 'src/shared/sql-query/query';
 
 @Injectable()
 export class SectionService {
@@ -192,27 +200,12 @@ export class SectionService {
         .leftJoin('location.configuration', 'configuration')
         .leftJoin('configuration.accesspoint', 'accesspoint')
         .leftJoin('configuration.ip', 'ip')
-        .select(`COUNT(configuration.id)`, 'configCount')
-        .addSelect(
-          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
-          'downCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
-          'maCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
-          'c24Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
-          'c5Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
-          'c6Count',
-        )
+        .select(configCount, 'configCount')
+        .addSelect(downCount, 'downCount')
+        .addSelect(maCount, 'maCount')
+        .addSelect(c24Count, 'c24Count')
+        .addSelect(c5Count, 'c5Count')
+        .addSelect(c6Count, 'c6Count')
         .where('section.id = :sectionId', { sectionId })
         .getRawOne<{
           configCount: number;
@@ -231,27 +224,12 @@ export class SectionService {
         .leftJoin('configuration.accesspoint', 'accesspoint')
         .leftJoin('configuration.ip', 'ip')
         .select('entity.id', 'entityId')
-        .addSelect(`COUNT(configuration.id)`, 'configCount')
-        .addSelect(
-          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
-          'downCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
-          'maCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
-          'c24Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
-          'c5Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
-          'c6Count',
-        )
+        .addSelect(configCount, 'configCount')
+        .addSelect(downCount, 'downCount')
+        .addSelect(maCount, 'maCount')
+        .addSelect(c24Count, 'c24Count')
+        .addSelect(c5Count, 'c5Count')
+        .addSelect(c6Count, 'c6Count')
         .where('section.id = :sectionId', { sectionId })
         .groupBy('entity.id')
         .getRawMany<{
@@ -294,27 +272,12 @@ export class SectionService {
         .leftJoin('configuration.accesspoint', 'accesspoint')
         .leftJoin('configuration.ip', 'ip')
         .select('section.id', 'sectionId')
-        .addSelect(`COUNT(configuration.id)`, 'configCount')
-        .addSelect(
-          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
-          'downCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
-          'maCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
-          'c24Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
-          'c5Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
-          'c6Count',
-        )
+        .addSelect(configCount, 'configCount')
+        .addSelect(downCount, 'downCount')
+        .addSelect(maCount, 'maCount')
+        .addSelect(c24Count, 'c24Count')
+        .addSelect(c5Count, 'c5Count')
+        .addSelect(c6Count, 'c6Count')
         .groupBy('section.id')
         .getRawMany<{
           sectionId: number;

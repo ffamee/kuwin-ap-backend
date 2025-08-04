@@ -6,11 +6,21 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Configuration } from './entities/configuration.entity';
-import { Brackets, DataSource, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { IpService } from '../ip/ip.service';
 import { CreateConfigurationDto } from './dto/create-configuration.dto';
 import { LocationsService } from '../locations/locations.service';
-import { ConfigState, StatusState } from 'src/shared/types/define-state';
+import { StatusState } from 'src/shared/types/define-state';
+import {
+  c24Count,
+  c5Count,
+  c6Count,
+  configCount,
+  downCount,
+  maCount,
+} from 'src/shared/sql-query/query';
+import { Metrics } from 'src/shared/types/snmp-metrics';
+import { AccesspointsService } from 'src/accesspoints/accesspoints.service';
 
 @Injectable()
 export class ConfigurationsService {
@@ -20,6 +30,7 @@ export class ConfigurationsService {
     private configurationsRepository: Repository<Configuration>,
     private readonly ipService: IpService,
     private readonly locationsService: LocationsService,
+    private readonly accesspointsService: AccesspointsService,
   ) {}
 
   async create(configuration: CreateConfigurationDto) {
@@ -98,19 +109,16 @@ export class ConfigurationsService {
       .leftJoin('configuration.accesspoint', 'accesspoint')
       .leftJoin('configuration.location', 'location')
       .leftJoin('configuration.ip', 'ip')
-      .where(`configuration.state != 'PENDING'`)
-      .andWhere(
-        new Brackets((qb) => {
-          qb.where('configuration.status IN (:down , :download)', {
-            down: StatusState.Down,
-            download: StatusState.Download,
-          })
-            .orWhere('configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE')
-            .orWhere('configuration.state = :state', {
-              state: ConfigState.Maintenance,
-            });
-        }),
+      .where(
+        'configuration.status IN (:down , :download, :maintenance, :pending)',
+        {
+          down: StatusState.Down,
+          download: StatusState.Download,
+          maintenance: StatusState.Maintenance,
+          pending: StatusState.Pending,
+        },
       )
+      .orWhere('configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE')
       .getMany();
   }
 
@@ -149,27 +157,12 @@ export class ConfigurationsService {
   async countAll() {
     return this.configurationsRepository
       .createQueryBuilder('configuration')
-      .select(`COUNT(configuration.id)`, 'configCount')
-      .addSelect(
-        `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
-        'downCount',
-      )
-      .addSelect(
-        `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
-        'maCount',
-      )
-      .addSelect(
-        `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
-        'c24Count',
-      )
-      .addSelect(
-        `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
-        'c5Count',
-      )
-      .addSelect(
-        `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
-        'c6Count',
-      )
+      .select(configCount, 'configCount')
+      .addSelect(downCount, 'downCount')
+      .addSelect(maCount, 'maCount')
+      .addSelect(c24Count, 'c24Count')
+      .addSelect(c5Count, 'c5Count')
+      .addSelect(c6Count, 'c6Count')
       .getRawOne<{
         configCount: number;
         downCount: number;
@@ -178,5 +171,198 @@ export class ConfigurationsService {
         c5Count: number;
         c6Count: number;
       }>();
+  }
+
+  async snap(data: unknown): Promise<{
+    apId: number;
+    ipId: number;
+    locationId: number;
+  } | null> {
+    const { mac, wlc, host, status, ip, ...metrics } = data as {
+      mac: string;
+      wlc: string;
+      host: string;
+      ip: string;
+      status: StatusState;
+    } & {
+      [key: string]: Metrics;
+    };
+    // console.dir({ mac, wlc, host, status, ip, metrics }, { depth: null });
+    if (ip) {
+      const config = await this.configurationsRepository.findOne({
+        where: {
+          ip: { ip },
+        },
+        relations: ['ip', 'location', 'accesspoint'],
+        select: {
+          ip: { id: true },
+          location: { id: true },
+          accesspoint: { id: true, radMac: true },
+        },
+      });
+      // console.log(config);
+      if (!config) {
+        // handle case config not found from ip
+        const configMac = await this.configurationsRepository.findOne({
+          where: {
+            accesspoint: { radMac: mac },
+          },
+          relations: ['ip', 'location', 'accesspoint'],
+        });
+        if (configMac) {
+          // this case is AP's ip address is not match to expected ip-> mismatch case
+          console.error(
+            `Mismatch configuration found for MAC ${mac} and IP ${ip}`,
+          );
+          await this.dataSource.transaction(async (manager) => {
+            await manager.update(Configuration, configMac.id, {
+              tx: (metrics.tx?.value as number) ?? null,
+              rx: (metrics.rx?.value as number) ?? null,
+              client24: (metrics.client24?.value as number) ?? null,
+              client5: (metrics.client5?.value as number) ?? null,
+              client6: (metrics.client6?.value as number) ?? null,
+              status: StatusState.Mismatch,
+              mismatchReason: ip,
+              wlc: wlc,
+            });
+            return {
+              apId: configMac.accesspoint.id,
+              ipId: configMac.ip.id,
+              locationId: configMac.location.id,
+            };
+          });
+        } else {
+          // ignored case config not found
+          console.error(`Configuration not found for MAC ${mac} or IP ${ip}`);
+          // create new configuration with
+          return null;
+        }
+      } else if (config.accesspoint) {
+        // handle case config found with accesspoint
+        const configMac = config.accesspoint.radMac;
+        if (configMac && configMac === mac) {
+          // current config is not changed
+          await this.configurationsRepository.update(
+            {
+              id: config.id,
+            },
+            {
+              tx: (metrics.tx?.value as number) ?? null,
+              rx: (metrics.rx?.value as number) ?? null,
+              client24: (metrics.client24?.value as number) ?? null,
+              client5: (metrics.client5?.value as number) ?? null,
+              client6: (metrics.client6?.value as number) ?? null,
+              status: config.problem ? StatusState.Maintenance : status,
+              mismatchReason: null,
+              wlc: wlc,
+            },
+          );
+          return {
+            apId: config.accesspoint.id,
+            ipId: config.ip.id,
+            locationId: config.location.id,
+          };
+        } else {
+          console.warn(
+            `Configuration with MAC ${mac} and IP ${ip} has different access point MAC ${configMac}.`,
+          );
+          // remove old config record and try to create new one
+          // if new record is created, it will be returned
+          // else return null and handle later ? ignore ?
+          await this.dataSource.transaction(async (manager) => {
+            const configToRemove = await manager.findOne(Configuration, {
+              where: { id: config.id },
+              lock: { mode: 'pessimistic_write' },
+            });
+            if (configToRemove) {
+              // create new config with old ip and old location with new ap
+              const ap = await this.accesspointsService.getAp(
+                manager,
+                mac,
+                host,
+              );
+              if (!ap) {
+                throw new InternalServerErrorException(
+                  `Failed to get or create access point with MAC ${mac} and host ${host}`,
+                );
+              }
+              // check if ap already has configuration
+              if (
+                await manager.exists(Configuration, {
+                  where: { accesspoint: { id: ap } },
+                })
+              ) {
+                throw new ConflictException(
+                  `Access point with MAC ${mac} already has configuration`,
+                );
+              }
+              const newConfig = manager.create(Configuration, {
+                ...configToRemove,
+                ip: { id: configToRemove.ip.id },
+                location: { id: configToRemove.location.id },
+                accesspoint: { id: ap },
+                tx: (metrics.tx?.value as number) ?? null,
+                rx: (metrics.rx?.value as number) ?? null,
+                client24: (metrics.client24?.value as number) ?? null,
+                client5: (metrics.client5?.value as number) ?? null,
+                client6: (metrics.client6?.value as number) ?? null,
+                status: configToRemove.problem
+                  ? StatusState.Maintenance
+                  : status,
+                mismatchReason: null,
+                wlc: wlc,
+              });
+              await manager.delete(Configuration, configToRemove);
+              await manager.save(newConfig);
+              return {
+                apId: newConfig.accesspoint.id,
+                ipId: newConfig.ip.id,
+                locationId: newConfig.location.id,
+              };
+            } else {
+              throw new NotFoundException(
+                `Configuration with id ${config.id} not found`,
+              );
+            }
+          });
+        }
+      } else {
+        // handle case config found without accesspoint -> expected to be created new accesspoint record
+        await this.dataSource.transaction(async (manager) => {
+          const ap = await this.accesspointsService.getAp(manager, mac, host);
+          if (!ap) {
+            throw new InternalServerErrorException(
+              `Failed to get or create access point with MAC ${mac} and host ${host}`,
+            );
+          }
+          if (
+            await manager.exists(Configuration, {
+              where: { accesspoint: { id: ap } },
+            })
+          ) {
+            throw new ConflictException(
+              `Access point with MAC ${mac} already has configuration`,
+            );
+          }
+          await manager.update(Configuration, config.id, {
+            tx: (metrics.tx?.value as number) ?? null,
+            rx: (metrics.rx?.value as number) ?? null,
+            client24: (metrics.client24?.value as number) ?? null,
+            client5: (metrics.client5?.value as number) ?? null,
+            client6: (metrics.client6?.value as number) ?? null,
+            status: config.problem ? StatusState.Maintenance : status,
+            mismatchReason: null,
+            wlc: wlc,
+            accesspoint: { id: ap },
+          });
+          return {
+            apId: ap,
+            ipId: config.ip.id,
+            locationId: config.location.id,
+          };
+        });
+      }
+    }
+    return null;
   }
 }

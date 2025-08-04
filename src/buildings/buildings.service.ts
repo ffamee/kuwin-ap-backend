@@ -17,6 +17,15 @@ import { deleteFile, saveFile } from 'src/shared/utils/file-system';
 import { Entity } from 'src/entities/entities/entity.entity';
 import { InfluxService } from 'src/influx/influx.service';
 import { Location } from 'src/locations/entities/location.entity';
+import {
+  c24Count,
+  c5Count,
+  c6Count,
+  configCount,
+  downCount,
+  maCount,
+} from 'src/shared/sql-query/query';
+import { OutputBuilding, RawBuilding } from 'src/shared/types/building-raw.dto';
 
 @Injectable()
 export class BuildingsService {
@@ -47,38 +56,93 @@ export class BuildingsService {
     buildingId: number,
   ) {
     // join location and then join location to configuration and count *
-    const [num, building] = await Promise.all([
+    const [building, num] = await Promise.all([
+      this.buildingRepository
+        .query(
+          `SELECT b.id AS building_id, b.name AS building_name,
+						loc.location_id , loc.location_name , loc.configuration_id , loc.created_at , loc.last_seen_at ,
+						loc.status , loc.client_24 , loc.client_5 , loc.client_6 , loc.rx , loc.tx ,
+						a.id AS accesspoint_id, a.name AS accesspoint_name,
+						i.id AS ip_id, i.ip_address
+					FROM building b
+					LEFT JOIN entity e ON e.id = b.entityId
+					LEFT JOIN section s ON s.id = e.sectionId
+					LEFT JOIN (
+						SELECT l.id AS location_id, l.location_name, l.buildingId AS location_building_id,
+							c.id AS configuration_id, c.created_at, c.last_seen_at, c.status,
+							c.client_24 , c.client_5, c.client_6, c.rx , c.tx,
+							c.accesspointId, c.ipId
+						FROM location l
+						INNER JOIN configuration c ON c.locationId = l.id ) loc ON loc.location_building_id = b.id
+					LEFT JOIN accesspoint a ON loc.accesspointId  = a.id
+					LEFT JOIN ip i ON loc.ipId = i.id
+					WHERE s.id = ? AND e.id = ? AND b.id = ?`,
+          [sectionId, entityId, buildingId],
+        )
+        .then((raws: RawBuilding[]) =>
+          raws.reduce((acc, row) => {
+            acc.id = row.building_id;
+            acc.name = row.building_name;
+            if (!acc.configurations) {
+              acc.configurations = [];
+            }
+            if (row.configuration_id && row.created_at && row.last_seen_at) {
+              acc.configurations.push({
+                id: row.configuration_id,
+                createdAt: row.created_at,
+                lastSeenAt: row.last_seen_at,
+                status: row.status,
+                client24: row.client_24,
+                client5: row.client_5,
+                client6: row.client_6,
+                rx: row.rx,
+                tx: row.tx,
+                accesspoint:
+                  row.accesspoint_id && row.accesspoint_name
+                    ? { id: row.accesspoint_id, name: row.accesspoint_name }
+                    : null,
+                ip:
+                  row.ip_id && row.ip_address
+                    ? { id: row.ip_id, ip: row.ip_address }
+                    : null,
+                location:
+                  row.location_id && row.location_name
+                    ? {
+                        id: row.location_id,
+                        name: row.location_name,
+                      }
+                    : null,
+              });
+            }
+            return acc;
+          }, {} as OutputBuilding),
+        )
+        .catch((error: unknown) => {
+          if (error instanceof Error) {
+            throw new InternalServerErrorException(
+              `Failed to fetch building overview: ${error.message}`,
+            );
+          }
+          throw new InternalServerErrorException(
+            'Error occurred while fetching building overview',
+          );
+        }),
       this.buildingRepository
         .createQueryBuilder('building')
         .leftJoin('building.entity', 'entity')
         .leftJoin('entity.section', 'section')
         .leftJoin('building.locations', 'location')
         .leftJoin('location.configuration', 'configuration')
-        .select('COUNT(configuration.id)', 'configCount')
-        .addSelect(
-          `SUM(CASE WHEN configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE OR configuration.status = 'DOWN' THEN 1 ELSE 0 END)`,
-          'downCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state = 'MAINTENANCE' THEN 1 ELSE 0 END)`,
-          'maCount',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_24 ELSE 0 END)`,
-          'c24Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_5 ELSE 0 END)`,
-          'c5Count',
-        )
-        .addSelect(
-          `SUM(CASE WHEN configuration.state NOT IN ('PENDING', 'MAINTENANCE') AND configuration.status != 'DOWN' THEN configuration.client_6 ELSE 0 END)`,
-          'c6Count',
-        )
+        .select(configCount, 'configCount')
+        .addSelect(downCount, 'downCount')
+        .addSelect(maCount, 'maCount')
+        .addSelect(c24Count, 'c24Count')
+        .addSelect(c5Count, 'c5Count')
+        .addSelect(c6Count, 'c6Count')
         .where('building.id = :buildingId', { buildingId })
         .andWhere('entity.id = :entityId', { entityId })
         .andWhere('section.id = :sectionId', { sectionId })
-        .andWhere('configuration.id IS NOT NULL')
+        // .andWhere('configuration.id IS NOT NULL')
         .getRawOne<{
           configCount: number;
           downCount: number;
@@ -87,47 +151,14 @@ export class BuildingsService {
           c5Count: number;
           c6Count: number;
         }>(),
-      this.buildingRepository
-        .createQueryBuilder('building')
-        .leftJoin('building.entity', 'entity')
-        .leftJoin('entity.section', 'section')
-        .leftJoin('building.locations', 'location')
-        .leftJoin('location.configuration', 'configuration')
-        .leftJoin('configuration.accesspoint', 'accesspoint')
-        .leftJoin('configuration.ip', 'ip')
-        .select([
-          'building.id',
-          'building.name',
-          'location.id',
-          'location.name',
-          'configuration',
-          'accesspoint.id',
-          'accesspoint.name',
-          'ip.id',
-          'ip.ip',
-        ])
-        .where('building.id = :buildingId', { buildingId })
-        .andWhere('entity.id = :entityId', { entityId })
-        .andWhere('section.id = :sectionId', { sectionId })
-        .andWhere('configuration.id IS NOT NULL')
-        .getOne(),
     ]);
-    if (!building || !num) {
-      throw new NotFoundException(`Building with id ${buildingId} not found`);
+    if (!building || Object.keys(building).length === 0 || !num) {
+      throw new NotFoundException(
+        `Building with id ${buildingId} in entity ${entityId} and section ${sectionId} not found`,
+      );
     }
     return {
-      id: building.id,
-      name: building.name,
-      configurations: building.locations.flatMap((location) =>
-        location.configuration
-          ? [
-              {
-                ...location.configuration,
-                location: { id: location.id, name: location.name },
-              },
-            ]
-          : [],
-      ),
+      ...building,
       ...num,
     };
   }
@@ -150,6 +181,18 @@ export class BuildingsService {
     if (!(await this.entityService.exist(createBuildingDto.entityId))) {
       throw new NotFoundException(
         `Entity with ID ${createBuildingDto.entityId} not found`,
+      );
+    }
+    if (
+      await this.buildingRepository.exists({
+        where: {
+          name: createBuildingDto.name,
+          entity: { id: createBuildingDto.entityId },
+        },
+      })
+    ) {
+      throw new ConflictException(
+        `Building with name ${createBuildingDto.name} already exists`,
       );
     }
     const filename = file

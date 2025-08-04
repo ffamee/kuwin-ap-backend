@@ -4,6 +4,8 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   OneToMany,
+  CreateDateColumn,
+  // UpdateDateColumn,
 } from 'typeorm';
 import { Entity } from '../../entities/entities/entity.entity';
 import { Location } from '../../locations/entities/location.entity';
@@ -42,9 +44,27 @@ export class Building {
   @Column('int', { name: 'code_id', unsigned: true, default: 0 })
   codeId: number;
 
+  @CreateDateColumn({
+    name: 'created_at',
+  })
+  createdAt: Date;
+
+  // @UpdateDateColumn({
+  //   name: 'updated_at',
+  // })
+  @Column('datetime', {
+    name: 'updated_at',
+    nullable: false,
+    precision: 6,
+    default: () => 'CURRENT_TIMESTAMP(6)',
+    onUpdate: 'CURRENT_TIMESTAMP(6)',
+  })
+  updatedAt: Date;
+
   @ManyToOne(() => Entity, (entity) => entity.buildings, {
     onDelete: 'RESTRICT',
     onUpdate: 'CASCADE',
+    nullable: false,
   })
   entity: Entity;
 

@@ -8,9 +8,9 @@ import {
   JoinColumn,
   OneToOne,
   PrimaryGeneratedColumn,
-  UpdateDateColumn,
+  // UpdateDateColumn,
 } from 'typeorm';
-import { ConfigState, StatusState } from '../../shared/types/define-state';
+import { StatusState } from '../../shared/types/define-state';
 
 @Entity('configuration')
 export class Configuration {
@@ -22,18 +22,17 @@ export class Configuration {
   })
   createdAt: Date;
 
-  @UpdateDateColumn({
+  // @UpdateDateColumn({
+  //   name: 'last_seen_at',
+  // })
+  @Column('datetime', {
     name: 'last_seen_at',
+    nullable: false,
+    precision: 6,
+    default: () => 'CURRENT_TIMESTAMP(6)',
+    onUpdate: 'CURRENT_TIMESTAMP(6)',
   })
   lastSeenAt: Date;
-
-  @Column({
-    name: 'state',
-    type: 'enum',
-    enum: ConfigState,
-    default: ConfigState.Pending,
-  })
-  state: ConfigState;
 
   @Column('varchar', {
     name: 'mismatch_reason',
@@ -42,6 +41,13 @@ export class Configuration {
     default: null,
   })
   mismatchReason: string | null;
+
+  @Column('text', {
+    name: 'problem',
+    nullable: true,
+    default: null,
+  })
+  problem: string | null;
 
   @Column('bigint', {
     name: 'tx',
@@ -87,10 +93,18 @@ export class Configuration {
     name: 'status',
     type: 'enum',
     enum: StatusState,
-    default: null,
-    nullable: true,
+    default: StatusState.Pending,
+    nullable: false,
   })
-  status: StatusState | null;
+  status: StatusState;
+
+  @Column('varchar', {
+    name: 'wlc',
+    length: 20,
+    nullable: true,
+    default: null,
+  })
+  wlc: string | null;
 
   @OneToOne(() => Accesspoint, (accesspoint) => accesspoint.configuration, {
     cascade: ['insert'],

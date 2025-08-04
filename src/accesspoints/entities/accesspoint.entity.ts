@@ -2,10 +2,12 @@ import { History } from '../../histories/entities/history.entity';
 import { Configuration } from '../../configurations/entities/configuration.entity';
 import {
   Column,
+  CreateDateColumn,
   Entity,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
+  // UpdateDateColumn,
 } from 'typeorm';
 
 @Entity('accesspoint')
@@ -214,6 +216,19 @@ export class Accesspoint {
 
   @Column('varchar', { name: 'owner', nullable: true, length: 100 })
   owner: string | null;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  // @UpdateDateColumn({ name: 'updated_at' })
+  @Column('datetime', {
+    name: 'updated_at',
+    nullable: false,
+    precision: 6,
+    default: () => 'CURRENT_TIMESTAMP(6)',
+    onUpdate: 'CURRENT_TIMESTAMP(6)',
+  })
+  updatedAt: Date;
 
   // @ManyToOne(() => Building, (building) => building.accesspoints, {
   //   onDelete: 'RESTRICT',

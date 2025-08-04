@@ -25,9 +25,9 @@ export class AccesspointsService {
       .join('.');
   }
 
-  private async create(manager: EntityManager, radMac: string) {
+  private async create(manager: EntityManager, radMac: string, host: string) {
     try {
-      const session = snmp.createSession('172.16.26.11', 'KUWINTEST', {
+      const session = snmp.createSession(host, 'KUWINTEST', {
         version: snmp.Version['2c'],
       });
       const decMac = this.macToDec(radMac);
@@ -50,12 +50,6 @@ export class AccesspointsService {
         ethMac: Buffer.from(ethMac as string, 'hex')
           .toString('hex')
           .replace(/(.{2})(?=.)/g, '$1:'),
-        latitude: '', // default value, can be updated later
-        longtitude: '', // default value, can be updated later
-        timestamp2: 0, // default value, can be updated later
-        channel_2: 0, // default value, can be updated later
-        clMax_2: 0, // default value, can be updated later
-        wlcActive: '', // default value, can be updated later
       });
       const res = await manager.save(ap);
       if (res) {
@@ -86,7 +80,11 @@ export class AccesspointsService {
   }
 
   // function to get AP id by MAC address, if not exists, create it
-  async getAp(manager: EntityManager, radMac: string): Promise<number | null> {
+  async getAp(
+    manager: EntityManager,
+    radMac: string,
+    host: string,
+  ): Promise<number | null> {
     const existingAp = await manager.findOne(Accesspoint, {
       where: { radMac },
       select: ['id'],
@@ -94,35 +92,12 @@ export class AccesspointsService {
     if (existingAp) {
       return existingAp.id;
     } else {
-      const res = await this.create(manager, radMac);
+      const res = await this.create(manager, radMac, host);
       if (res instanceof Accesspoint) {
         return res.id;
       }
       console.error('Failed to create AP:', res);
       return null;
     }
-  }
-
-  async test(mac: string) {
-    console.time('SNMP Test');
-    // const session = snmp.createSession('172.16.26.11', 'KUWINTEST', {
-    //   version: snmp.Version['2c'],
-    // });
-    // const decMac = this.macToDec(mac);
-    // const oids = [
-    //   '1.3.6.1.4.1.14179.2.2.1.1.3' + '.' + decMac, // ap name
-    //   '1.3.6.1.4.1.14179.2.2.1.1.16' + '.' + decMac, // model
-    //   '1.3.6.1.4.1.14179.2.2.1.1.17' + '.' + decMac, // serial
-    //   '1.3.6.1.4.1.14179.2.2.1.1.31' + '.' + decMac, // ios version
-    //   '1.3.6.1.4.1.14179.2.2.1.1.33' + '.' + decMac, // eth mac
-    // ];
-    // const [apName, model, serial, iosVersion, ethMac] = await Promise.all(
-    //   oids.map((oid) => get(session, oid)),
-    // );
-    // console.dir({ apName, model, serial, iosVersion, ethMac }, { depth: null });
-    // session.close();
-    const res = await this.create(this.dataSource.manager, mac);
-    console.dir(res, { depth: null });
-    console.timeEnd('SNMP Test');
   }
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as snmp from 'net-snmp';
 import { InfluxService } from '../influx/influx.service';
 // import { Cron } from '@nestjs/schedule';
-import walk from 'src/shared/utils/snmp';
+import { walk } from 'src/shared/utils/snmp';
 // import { exec } from 'child_process';
 // import * as path from 'path';
 

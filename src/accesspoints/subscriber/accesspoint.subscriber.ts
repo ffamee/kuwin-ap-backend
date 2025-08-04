@@ -1,12 +1,5 @@
-import {
-  EntitySubscriberInterface,
-  EventSubscriber,
-  Not,
-  UpdateEvent,
-} from 'typeorm';
+import { EntitySubscriberInterface, EventSubscriber } from 'typeorm';
 import { Accesspoint } from '../entities/accesspoint.entity';
-import { Configuration } from '../../configurations/entities/configuration.entity';
-import { ConfigState } from '../../shared/types/define-state';
 
 @EventSubscriber()
 export class ConfigurationSubscriber

@@ -5,7 +5,7 @@ import { BullModule, BullRegistrar } from '@nestjs/bullmq';
 import { WlcPollingProcessor } from './snmp.processor';
 import { OidModule } from '../oid/oid.module';
 import { InfluxModule } from '../influx/influx.module';
-import { AccesspointsModule } from '../accesspoints/accesspoints.module';
+import { ConfigurationsModule } from '../configurations/configurations.module';
 
 @Module({
   imports: [
@@ -13,7 +13,7 @@ import { AccesspointsModule } from '../accesspoints/accesspoints.module';
     BullModule.registerFlowProducer({ name: 'wlc-polling-flow' }),
     OidModule,
     InfluxModule,
-    AccesspointsModule,
+    ConfigurationsModule,
   ],
   providers: [SnmpService, WlcPollingProcessor],
   controllers: [SnmpController],

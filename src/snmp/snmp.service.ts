@@ -14,7 +14,7 @@ export class SnmpService {
   @Cron('*/5 * * * *')
   async getSnmp() {
     const wlcs = [
-      // { name: 'wlc-1', host: '172.16.26.10' },
+      { name: 'wlc-1', host: '172.16.26.10' },
       { name: 'wlc-2', host: '172.16.26.12' },
       // { name: 'wlc-3', host: '172.16.26.16' },
       { name: 'wlc-4', host: '172.16.26.11' },
@@ -46,12 +46,14 @@ export class SnmpService {
     //     },
     //   })),
     // );
+    console.time('SNMP polling jobs processing time');
     const jobs = await this.flowProducer.addBulk(
       wlcs.map((wlc) => ({
         name: 'wlc-polling-job',
         queueName: 'wlc-polling-queue',
         data: {
           data: `WLC polling on Host ${wlc.host}`,
+          wlcHost: wlc.host,
           wlcName: wlc.name,
         },
         children: oids.map((oid) => ({
@@ -81,10 +83,11 @@ export class SnmpService {
       })),
     );
     console.log({ message: 'SNMP polling jobs added to the queue!' });
-    // const queueEvent = new QueueEvents('wlc-polling-queue');
-    // await Promise.all(jobs.map((job) => job.job.waitUntilFinished(queueEvent)));
+    const queueEvent = new QueueEvents('wlc-polling-queue');
+    await Promise.all(jobs.map((job) => job.job.waitUntilFinished(queueEvent)));
+    console.timeEnd('SNMP polling jobs processing time');
     // console.log('All SNMP polling jobs have been processed successfully!');
-    // await this.accessPointsService.updateSnapshot();
+    // await this.accessPointsService.updateSnapshot(); change to configurationService
     // console.log('Update snapshot completed!');
   }
 }

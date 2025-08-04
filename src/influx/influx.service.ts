@@ -15,6 +15,7 @@ import {
 import { AccesspointsService } from '../accesspoints/accesspoints.service';
 import { Metrics } from 'src/shared/types/snmp-metrics';
 import * as snmp from 'net-snmp';
+// import { ErrorState } from 'src/shared/types/define-state';
 
 @Injectable()
 export class InfluxService {
@@ -69,36 +70,74 @@ export class InfluxService {
   async writePoints(
     measurement: string,
     wlc: string,
-    data: Map<string, Record<string, Metrics>>,
+    data: Map<string, Record<string, unknown>>,
   ) {
     const points: Point[] = [];
     for (const [mac, metrics] of data.entries()) {
-      const point = new Point(measurement)
-        .tag('ap_id', metrics.apId.value as string)
-        .tag('building_id', metrics.buildingId.value as string)
-        .tag('entity_id', metrics.entityId.value as string)
-        .tag('ip_address', metrics.ip.value as string)
-        .tag('mac_address', mac)
-        .tag('section_id', metrics.sectionId.value as string)
-        .tag('wlc', wlc);
+      try {
+        const { apId, ipId, locationId, ...res } = metrics as {
+          apId: number;
+          ipId: number;
+          locationId: number;
+        } & Record<string, Metrics>;
+        const point = new Point(measurement)
+          .tag('apId', apId.toString())
+          .tag('ipId', ipId.toString())
+          .tag('locationId', locationId.toString())
+          .tag('wlc', wlc);
 
-      for (const [name, metric] of Object.entries(metrics)) {
-        if (
-          name === 'apId' ||
-          name === 'buildingId' ||
-          name === 'entityId' ||
-          name === 'sectionId' ||
-          name === 'ip'
-        )
-          continue;
-        if (metric.type === snmp.ObjectType.Counter) {
-          point.intField(name, metric.value);
-        } else {
-          point.stringField(name, metric.value);
+        // iterate on others keys
+        for (const [name, metric] of Object.entries(res)) {
+          if (
+            metric.type === snmp.ObjectType.Counter ||
+            metric.type === snmp.ObjectType.Counter32 ||
+            metric.type === snmp.ObjectType.Counter64 ||
+            metric.type === snmp.ObjectType.Gauge ||
+            metric.type === snmp.ObjectType.Gauge32 ||
+            metric.type === snmp.ObjectType.Integer ||
+            metric.type === snmp.ObjectType.Integer32
+          ) {
+            point.intField(name, metric.value);
+          } else if (
+            metric.type === snmp.ObjectType.TimeTicks ||
+            metric.type === snmp.ObjectType.Unsigned32
+          ) {
+            point.uintField(name, metric.value);
+          } else if (metric.type === snmp.ObjectType.Boolean) {
+            point.booleanField(name, metric.value);
+          } else if (metric.type === snmp.ObjectType.BitString) {
+            // value as binary string
+            point.stringField(
+              name,
+              Buffer.from(metric.value as string, 'binary').toString('binary'),
+            );
+          } else if (
+            metric.type === snmp.ObjectType.OctetString ||
+            metric.type === snmp.ObjectType.Opaque
+          ) {
+            // value as hex string
+            point.stringField(
+              name,
+              Buffer.from(metric.value as string, 'hex').toString('hex'),
+            );
+          } else if (
+            metric.type === snmp.ObjectType.IpAddress ||
+            metric.type === snmp.ObjectType.OID
+          ) {
+            point.stringField(name, metric.value as string);
+          } else continue; // skip unsupported types or unrecognized types
         }
+        points.push(point);
+      } catch (error) {
+        console.error(
+          `Error processing metrics for MAC ${mac}:`,
+          metrics,
+          error,
+        );
+        // Optionally, you can throw an error or handle it as needed
       }
-      points.push(point);
     }
+
     try {
       this.writeApi.writePoints(points);
       return await this.writeApi.flush();
@@ -114,11 +153,6 @@ export class InfluxService {
         'MAC address is required to query last point',
       );
     }
-    // if (!(await this.accesspointsService.existRadMac(mac))) {
-    //   throw new NotFoundException(
-    //     'Access point with this MAC address does not exist',
-    //   );
-    // }
 
     const query = `import "internal/debug"
 			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
@@ -151,9 +185,9 @@ export class InfluxService {
 				|> range(start: -5m)
 				|> filter(fn: (r) => r._measurement == "ap_metrics")
 				|> last()
-				|> group(columns: ["mac_address"], mode: "by")
+				|> group(columns: ["ap_id"], mode: "by")
 				|> pivot(
-							rowKey:["_time", "mac_address"],
+							rowKey:["_time", "mac_address", "ip_address", "ap_id", "entity_id", "building_id", "section_id"],
 							columnKey: ["_field"],
 							valueColumn: "_value"
 						)
@@ -165,7 +199,7 @@ export class InfluxService {
 						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
 						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
 					}))
-				|> sort(columns: ["mac_address"])`;
+				|> sort(columns: ["ap_id"])`;
 
     try {
       const result = await this.queryApi.collectRows(query);
@@ -179,50 +213,14 @@ export class InfluxService {
   async queryIpLog() {
     const query = `import "internal/debug"
 			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
-				|> range(start: -3d)
-				|> filter(fn: (r) => r._measurement == "check_ip")
-				|> group(columns: ["mac_address", "ip"], mode: "by")
-				|> last()
-				|> unique(column: "mac_address")
-				|> keep(columns: ["_time", "mac_address", "_value"])
-				|> sort(columns: ["mac_address"])`;
-
-    try {
-      const result = await this.queryApi.collectRows(query);
-      return result || null; // Return the last point or null if no points found
-    } catch (error) {
-      console.error('Error querying last point from InfluxDB:', error);
-      throw new Error('Failed to query last point from InfluxDB');
-    }
-  }
-
-  async findOneAp(
-    sectionId: number,
-    entityId: number,
-    buildingId: number,
-    apId: number,
-  ) {
-    const query = `import "internal/debug"
-			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
-				|> range(start: -5m)
+				|> range(start: -1h)
 				|> filter(fn: (r) => r._measurement == "ap_metrics")
-				|> filter(fn: (r) => r.ap_id == "${apId}" and r.entity_id == "${entityId}"
-					and r.building_id == "${buildingId}" and r.section_id == "${sectionId}")
+				|> filter(fn: (r) => r._field == "client-6")
+				|> unique(column: "ip_address")
 				|> last()
-				|> group(columns: ["mac_address"], mode: "by")
-				|> pivot(
-							rowKey:["_time", "mac_address"],
-							columnKey: ["_field"],
-							valueColumn: "_value"
-						)
-				|> map(fn: (r) => ({
-					r with
-						tx         : if exists r.tx then r.tx else debug.null(type: "int"),
-						rx         : if exists r.rx then r.rx else debug.null(type: "int"),
-						"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
-						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
-						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
-					}))`;
+				|> keep(columns: ["ip_address", "mac_address"])
+				|> sort(columns: ["ip_address"])
+				`;
 
     try {
       const result = await this.queryApi.collectRows(query);
@@ -233,109 +231,146 @@ export class InfluxService {
     }
   }
 
-  async findOneBuilding(
-    sectionId: number,
-    entityId: number,
-    buildingId: number,
-  ) {
-    const query = `import "internal/debug"
-			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
-				|> range(start: -5m)
-				|> filter(fn: (r) => r._measurement == "ap_metrics")
-				|> filter(fn: (r) => r.entity_id == "${entityId}" and r.building_id == "${buildingId}"
-					and r.section_id == "${sectionId}")
-				|> last()
-				|> group(columns: ["_field"], mode: "by")
-				|> sum()
-				|> group(columns: ["result"], mode: "by")
-				|> pivot(
-							rowKey:[],
-							columnKey: ["_field"],
-							valueColumn: "_value"
-						)
-				|> map(fn: (r) => ({
-					r with
-						tx         : if exists r.tx then r.tx else debug.null(type: "int"),
-						rx         : if exists r.rx then r.rx else debug.null(type: "int"),
-						"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
-						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
-						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
-					}))`;
+  // async findOneAp(
+  //   sectionId: number,
+  //   entityId: number,
+  //   buildingId: number,
+  //   apId: number,
+  // ) {
+  //   const query = `import "internal/debug"
+  // 		from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+  // 			|> range(start: -5m)
+  // 			|> filter(fn: (r) => r._measurement == "ap_metrics")
+  // 			|> filter(fn: (r) => r.ap_id == "${apId}" and r.entity_id == "${entityId}"
+  // 				and r.building_id == "${buildingId}" and r.section_id == "${sectionId}")
+  // 			|> last()
+  // 			|> group(columns: ["mac_address"], mode: "by")
+  // 			|> pivot(
+  // 						rowKey:["_time", "mac_address"],
+  // 						columnKey: ["_field"],
+  // 						valueColumn: "_value"
+  // 					)
+  // 			|> map(fn: (r) => ({
+  // 				r with
+  // 					tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+  // 					rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+  // 					"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
+  // 					"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
+  // 					"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
+  // 				}))`;
 
-    try {
-      const result = await this.queryApi.collectRows(query);
-      return result || null; // Return the last point or null if no points found
-    } catch (error) {
-      console.error('Error querying last point from InfluxDB:', error);
-      throw new Error('Failed to query last point from InfluxDB');
-    }
-  }
+  //   try {
+  //     const result = await this.queryApi.collectRows(query);
+  //     return result || null; // Return the last point or null if no points found
+  //   } catch (error) {
+  //     console.error('Error querying last point from InfluxDB:', error);
+  //     throw new Error('Failed to query last point from InfluxDB');
+  //   }
+  // }
 
-  async findOneEntity(sectionId: number, entityId: number) {
-    const query = `import "internal/debug"
-			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
-				|> range(start: -5m)
-				|> filter(fn: (r) => r._measurement == "ap_metrics")
-				|> filter(fn: (r) => r.entity_id == "${entityId}" and r.section_id == "${sectionId}")
-				|> last()
-				|> group(columns: ["_field"], mode: "by")
-				|> sum()
-				|> group(columns: ["result"], mode: "by")
-				|> pivot(
-							rowKey:[],
-							columnKey: ["_field"],
-							valueColumn: "_value"
-						)
-				|> map(fn: (r) => ({
-					r with
-						tx         : if exists r.tx then r.tx else debug.null(type: "int"),
-						rx         : if exists r.rx then r.rx else debug.null(type: "int"),
-						"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
-						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
-						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
-					}))`;
+  // async findOneBuilding(
+  //   sectionId: number,
+  //   entityId: number,
+  //   buildingId: number,
+  // ) {
+  //   const query = `import "internal/debug"
+  // 		from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+  // 			|> range(start: -5m)
+  // 			|> filter(fn: (r) => r._measurement == "ap_metrics")
+  // 			|> filter(fn: (r) => r.entity_id == "${entityId}" and r.building_id == "${buildingId}"
+  // 				and r.section_id == "${sectionId}")
+  // 			|> last()
+  // 			|> group(columns: ["_field"], mode: "by")
+  // 			|> sum()
+  // 			|> group(columns: ["result"], mode: "by")
+  // 			|> pivot(
+  // 						rowKey:[],
+  // 						columnKey: ["_field"],
+  // 						valueColumn: "_value"
+  // 					)
+  // 			|> map(fn: (r) => ({
+  // 				r with
+  // 					tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+  // 					rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+  // 					"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
+  // 					"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
+  // 					"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
+  // 				}))`;
 
-    try {
-      const result = await this.queryApi.collectRows(query);
-      return result || null; // Return the last point or null if no points found
-    } catch (error) {
-      console.error('Error querying last point from InfluxDB:', error);
-      throw new Error('Failed to query last point from InfluxDB');
-    }
-  }
+  //   try {
+  //     const result = await this.queryApi.collectRows(query);
+  //     return result || null; // Return the last point or null if no points found
+  //   } catch (error) {
+  //     console.error('Error querying last point from InfluxDB:', error);
+  //     throw new Error('Failed to query last point from InfluxDB');
+  //   }
+  // }
 
-  async findOneSection(sectionId: number) {
-    const query = `import "internal/debug"
-			from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
-				|> range(start: -5m)
-				|> filter(fn: (r) => r._measurement == "ap_metrics")
-				|> filter(fn: (r) => r.section_id == "${sectionId}")
-				|> last()
-				|> group(columns: ["entity_id", "_field"], mode: "by")
-				|> sum()
-				// |> group(columns: ["result"], mode: "by")
-				|> pivot(
-							rowKey:[],
-							columnKey: ["_field"],
-							valueColumn: "_value"
-						)
-				|> map(fn: (r) => ({
-					r with
-						tx         : if exists r.tx then r.tx else debug.null(type: "int"),
-						rx         : if exists r.rx then r.rx else debug.null(type: "int"),
-						"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
-						"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
-						"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
-					}))`;
+  // async findOneEntity(sectionId: number, entityId: number) {
+  //   const query = `import "internal/debug"
+  // 		from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+  // 			|> range(start: -5m)
+  // 			|> filter(fn: (r) => r._measurement == "ap_metrics")
+  // 			|> filter(fn: (r) => r.entity_id == "${entityId}" and r.section_id == "${sectionId}")
+  // 			|> last()
+  // 			|> group(columns: ["_field"], mode: "by")
+  // 			|> sum()
+  // 			|> group(columns: ["result"], mode: "by")
+  // 			|> pivot(
+  // 						rowKey:[],
+  // 						columnKey: ["_field"],
+  // 						valueColumn: "_value"
+  // 					)
+  // 			|> map(fn: (r) => ({
+  // 				r with
+  // 					tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+  // 					rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+  // 					"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
+  // 					"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
+  // 					"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
+  // 				}))`;
 
-    try {
-      const result = await this.queryApi.collectRows(query);
-      return result || null; // Return the last point or null if no points found
-    } catch (error) {
-      console.error('Error querying last point from InfluxDB:', error);
-      throw new Error('Failed to query last point from InfluxDB');
-    }
-  }
+  //   try {
+  //     const result = await this.queryApi.collectRows(query);
+  //     return result || null; // Return the last point or null if no points found
+  //   } catch (error) {
+  //     console.error('Error querying last point from InfluxDB:', error);
+  //     throw new Error('Failed to query last point from InfluxDB');
+  //   }
+  // }
+
+  // async findOneSection(sectionId: number) {
+  //   const query = `import "internal/debug"
+  // 		from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+  // 			|> range(start: -5m)
+  // 			|> filter(fn: (r) => r._measurement == "ap_metrics")
+  // 			|> filter(fn: (r) => r.section_id == "${sectionId}")
+  // 			|> last()
+  // 			|> group(columns: ["entity_id", "_field"], mode: "by")
+  // 			|> sum()
+  // 			// |> group(columns: ["result"], mode: "by")
+  // 			|> pivot(
+  // 						rowKey:[],
+  // 						columnKey: ["_field"],
+  // 						valueColumn: "_value"
+  // 					)
+  // 			|> map(fn: (r) => ({
+  // 				r with
+  // 					tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+  // 					rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+  // 					"client-2.4"  : if exists r["client-2.4"] then r["client-2.4"] else debug.null(type: "int"),
+  // 					"client-5"   : if exists r["client-5"] then r["client-5"] else debug.null(type: "int"),
+  // 					"client-6"   : if exists r["client-6"] then r["client-6"] else debug.null(type: "int")
+  // 				}))`;
+
+  //   try {
+  //     const result = await this.queryApi.collectRows(query);
+  //     return result || null; // Return the last point or null if no points found
+  //   } catch (error) {
+  //     console.error('Error querying last point from InfluxDB:', error);
+  //     throw new Error('Failed to query last point from InfluxDB');
+  //   }
+  // }
 
   async test() {
     const query = `

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as snmp from 'net-snmp';
-import walk from 'src/shared/utils/snmp';
+import { walk } from 'src/shared/utils/snmp';
 
 @Injectable()
 export class OidPollingProcessor {

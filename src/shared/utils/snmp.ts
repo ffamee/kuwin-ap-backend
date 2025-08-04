@@ -250,7 +250,7 @@ const feedCb = (
 
 const maxRepetitions = 20; // จำนวนสูงสุดของการทำซ้ำในแต่ละการเดิน
 
-export default function walk(session: snmp.Session, oid: string) {
+export function walk(session: snmp.Session, oid: string) {
   const data = new Map<string, Record<string, unknown>>();
   return new Promise((resolve, reject) => {
     session.walk(
@@ -266,5 +266,23 @@ export default function walk(session: snmp.Session, oid: string) {
         resolve(Object.fromEntries(data.entries()));
       },
     );
+  });
+}
+
+export function get(session: snmp.Session, oid: string) {
+  return new Promise((resolve, reject) => {
+    session.get([oid], function (error, varbinds) {
+      if (error) {
+        console.error('Error: ', error.toString());
+        reject(error);
+      } else if (varbinds) {
+        for (let i = 0; i < varbinds.length; i++) {
+          // for version 2c we must check each OID for an error condition
+          if (snmp.isVarbindError(varbinds[i]))
+            console.error(snmp.varbindError(varbinds[i]));
+          resolve(varbinds[i].value);
+        }
+      }
+    });
   });
 }
