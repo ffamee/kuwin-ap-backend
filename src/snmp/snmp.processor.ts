@@ -45,10 +45,8 @@ export class WlcPollingProcessor extends WorkerHost {
       }
     }
     for (const [mac, metrics] of data.entries()) {
-      const { radio, band, client, status, ip, ...rest } = metrics as Record<
-        string,
-        Metrics
-      >;
+      const { radio, band, client, status, channel, rx, tx, ip, ...rest } =
+        metrics as Record<string, Metrics>;
       try {
         // if (
         //   radio &&
@@ -65,30 +63,40 @@ export class WlcPollingProcessor extends WorkerHost {
         const radioValue = radio.value as Record<string, unknown>;
         const bandValue = band.value as Record<string, unknown>;
         const clientValue = client.value as Record<string, unknown>;
+        const channelValue = channel.value as Record<string, unknown>;
+        const rxValue = rx.value as Record<string, unknown>;
+        const txValue = tx.value as Record<string, unknown>;
         if (
           Object.keys(radioValue).length !== Object.keys(bandValue).length ||
           Object.keys(radioValue).length !== Object.keys(clientValue).length ||
-          Object.keys(clientValue).length !== Object.keys(bandValue).length
+          Object.keys(radioValue).length !== Object.keys(channelValue).length
         ) {
           console.warn(
             `Mismatch in radio, band, and client data for ${mac}. with lengths: radio=${
               Object.keys(radioValue).length
             }, band=${Object.keys(bandValue).length}, client=${
               Object.keys(clientValue).length
-            }`,
+            }, channel=${Object.keys(channelValue).length}`,
           );
           continue;
         }
         const clientBand: { [key: string]: Metrics } = {};
+        const channelList: { [key: string]: Metrics } = {};
         for (const index of Object.keys(radioValue)) {
           const radioData = radioValue[index];
           const bandData = bandValue[index];
           const clientData = clientValue[index];
+          const channelData = channelValue[index];
           if (
-            !(index in radioValue && index in bandValue && index in clientValue)
+            !(
+              index in radioValue &&
+              index in bandValue &&
+              index in clientValue &&
+              index in channelValue
+            )
           ) {
             console.warn(
-              `Missing data for ${mac} at index ${index}. Skipping this entry. with radio=${(radioData as string) ?? 'N/A'}, band=${(bandData as string) ?? 'N/A'}, client=${(clientData as string) ?? 'N/A'}`,
+              `Missing data for ${mac} at index ${index}. Skipping this entry. with radio=${(radioData as string) ?? 'N/A'}, band=${(bandData as string) ?? 'N/A'}, client=${(clientData as string) ?? 'N/A'}, channel=${(channelData as string) ?? 'N/A'}`,
             );
             continue;
           }
@@ -112,12 +120,39 @@ export class WlcPollingProcessor extends WorkerHost {
             };
           }
           (clientBand[t].value as number) += clientData as number;
+          const tt = `channel${index === '0' ? '' : '2'}`;
+          channelList[tt] = {
+            value: channelData,
+            type: channel.type,
+          };
+        }
+        // sum rx and tx
+        let sumRx = 0;
+        let sumTx = 0;
+        if (Object.keys(rxValue).length !== Object.keys(txValue).length) {
+          console.warn(
+            `Mismatch in rx and tx data for ${mac}. with lengths: rx=${Object.keys(rxValue).length}, tx=${Object.keys(txValue).length}`,
+          );
+          continue;
+        }
+        for (const index of Object.keys(rxValue)) {
+          if (!(index in txValue)) {
+            console.warn(
+              `Missing tx data for ${mac} at index ${index}. Skipping this entry.`,
+            );
+            continue;
+          }
+          sumRx += rxValue[index] as number;
+          sumTx += txValue[index] as number;
         }
         // get id before save
         const ids = await this.configurationsService.snap({
           mac,
           ...rest,
           ...clientBand,
+          ...channelList,
+          rx: { value: sumRx, type: rx.type },
+          tx: { value: sumTx, type: tx.type },
           wlc: wlcName,
           host: wlcHost,
           ip: ip.value,
@@ -131,7 +166,9 @@ export class WlcPollingProcessor extends WorkerHost {
             ...ids,
             ...rest,
             ...clientBand,
-            // wlc: { value: wlcName, type: 0 },
+            ...channelList,
+            rx: { value: sumRx, type: rx.type },
+            tx: { value: sumTx, type: tx.type },
           });
         } else {
           // remove key 'mac' from data
@@ -143,6 +180,9 @@ export class WlcPollingProcessor extends WorkerHost {
           radio,
           band,
           client,
+          channel,
+          rx,
+          tx,
           status,
           ip,
         });

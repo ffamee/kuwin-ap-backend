@@ -89,6 +89,22 @@ export class Configuration {
   })
   client6: number | null;
 
+  @Column('int', {
+    name: 'channel',
+    nullable: true,
+    unsigned: true,
+    default: null,
+  })
+  channel: number | null;
+
+  @Column('int', {
+    name: 'channel_2',
+    nullable: true,
+    unsigned: true,
+    default: null,
+  })
+  channel2: number | null;
+
   @Column({
     name: 'status',
     type: 'enum',

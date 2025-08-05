@@ -29,9 +29,10 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
   const rxBaseOid = '1.3.6.1.4.1.9.9.513.1.2.2.1.13.'; // Rx bytes
   const txBaseOid = '1.3.6.1.4.1.9.9.513.1.2.2.1.14.'; // Tx bytes
   const ipBaseOid = '1.3.6.1.4.1.14179.2.2.1.1.19.'; // IP address of AP
-  const oidAPStatusBaseOid = '1.3.6.1.4.1.14179.2.2.1.1.6.';
-  const oidRadioStatusBaseOid = '1.3.6.1.4.1.14179.2.2.2.1.12.';
-  const oidRadioBandBaseOid = '1.3.6.1.4.1.9.9.513.1.2.1.1.27.';
+  const apStatusBaseOid = '1.3.6.1.4.1.14179.2.2.1.1.6.';
+  const radioStatusBaseOid = '1.3.6.1.4.1.14179.2.2.2.1.12.';
+  const radioBandBaseOid = '1.3.6.1.4.1.9.9.513.1.2.1.1.27.';
+  const channelBaseOid = '1.3.6.1.4.1.14179.2.2.2.1.4.'; // Channel of the AP
 
   // 1. ตรวจสอบเงื่อนไขสำหรับ 'client-2.4' หรือ 'client-5' หรือ 'client-6'
   // '1.3.6.1.4.1.14179.2.2.2.1.15.x.x.x.x.x.x.0' หรือ '.1' หรือ '.2'
@@ -88,8 +89,8 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
       result.macAddress = convertOidMacToStandard(oidMac);
       result.name = 'ip';
     }
-  } else if (oid.startsWith(oidAPStatusBaseOid)) {
-    const remaining = oid.substring(oidAPStatusBaseOid.length); // x.x.x.x.x.x
+  } else if (oid.startsWith(apStatusBaseOid)) {
+    const remaining = oid.substring(apStatusBaseOid.length); // x.x.x.x.x.x
     const parts = remaining.split('.');
     if (parts.length === 6) {
       // ต้องมี 6 หลัก MAC
@@ -97,8 +98,8 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
       result.macAddress = convertOidMacToStandard(oidMac);
       result.name = 'status';
     }
-  } else if (oid.startsWith(oidRadioStatusBaseOid)) {
-    const remaining = oid.substring(oidRadioStatusBaseOid.length); // x.x.x.x.x.x.0 .1 .2
+  } else if (oid.startsWith(radioStatusBaseOid)) {
+    const remaining = oid.substring(radioStatusBaseOid.length); // x.x.x.x.x.x.0 .1 .2
     const parts = remaining.split('.');
     if (parts.length === 7) {
       // ต้องมี 6 หลัก MAC + 1 หลักสุดท้าย (.0 หรือ .1 หรือ .2)
@@ -115,8 +116,8 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
       result.name = 'radio';
       result.index = parts[6]; // เก็บ index เช่น '0', '1', '2'
     }
-  } else if (oid.startsWith(oidRadioBandBaseOid)) {
-    const remaining = oid.substring(oidRadioBandBaseOid.length); // x.x.x.x.x.x.0 .1 .2
+  } else if (oid.startsWith(radioBandBaseOid)) {
+    const remaining = oid.substring(radioBandBaseOid.length); // x.x.x.x.x.x.0 .1 .2
     const parts = remaining.split('.');
     if (parts.length === 7) {
       // ต้องมี 6 หลัก MAC + 1 หลักสุดท้าย (.0 หรือ .1 หรือ .2)
@@ -131,6 +132,16 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
       //   result.name = 'radio-band-6';
       // }
       result.name = 'band';
+      result.index = parts[6]; // เก็บ index เช่น '0', '1', '2'
+    }
+  } else if (oid.startsWith(channelBaseOid)) {
+    const remaining = oid.substring(channelBaseOid.length); // x.x.x.x.x.x
+    const parts = remaining.split('.');
+    if (parts.length === 7) {
+      // ต้องมี 6 หลัก MAC
+      const oidMac = parts.slice(0, 6).join('.');
+      result.macAddress = convertOidMacToStandard(oidMac);
+      result.name = 'channel';
       result.index = parts[6]; // เก็บ index เช่น '0', '1', '2'
     }
   }
@@ -165,41 +176,8 @@ const feedCb = (
           console.log(name);
           continue; // Skip if name or macAddress is not resolved
         }
-        if (name.name === 'rx' || name.name === 'tx') {
-          if (
-            data.has(name.macAddress) &&
-            Object.prototype.hasOwnProperty.call(
-              data.get(name.macAddress),
-              name.name,
-            )
-          ) {
-            const existing = data.get(name.macAddress) ?? {};
-            const val =
-              ((existing[name.name] as Metrics)?.value as number) ??
-              0 + (varbind.value as number);
-            data.set(name.macAddress, {
-              ...data.get(name.macAddress),
-              [name.name]: {
-                value: val,
-                type: varbind.type,
-              },
-            });
-          } else {
-            data.set(name.macAddress, {
-              ...data.get(name.macAddress),
-              [name.name]: {
-                value: varbind.value as number,
-                type: varbind.type,
-              },
-            });
-          }
-        } else if (
-          name.name === 'client' ||
-          name.name === 'radio' ||
-          name.name === 'band'
-        ) {
+        if (name.index) {
           // treat it like object for keys '0', '1', '2' etc.
-          // สำหรับ client, radio, band
           if (
             data.has(name.macAddress) &&
             Object.prototype.hasOwnProperty.call(
@@ -213,7 +191,7 @@ const feedCb = (
                 string,
                 unknown
               >) ?? {};
-            val[name.index ?? ''] = varbind.value;
+            val[name.index] = varbind.value;
             data.set(name.macAddress, {
               ...data.get(name.macAddress),
               [name.name]: {
@@ -226,7 +204,7 @@ const feedCb = (
               ...data.get(name.macAddress),
               [name.name]: {
                 value: {
-                  [name.index ?? '']: varbind.value,
+                  [name.index]: varbind.value,
                 },
                 type: varbind.type,
               },

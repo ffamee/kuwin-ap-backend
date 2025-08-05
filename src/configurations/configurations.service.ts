@@ -154,6 +154,20 @@ export class ConfigurationsService {
     return configuration;
   }
 
+  async isExist(sec: number, entity: number, build: number, loc: number) {
+    return await this.configurationsRepository.exists({
+      where: {
+        location: {
+          id: loc,
+          building: {
+            id: build,
+            entity: { id: entity, section: { id: sec } },
+          },
+        },
+      },
+    });
+  }
+
   async countAll() {
     return this.configurationsRepository
       .createQueryBuilder('configuration')
@@ -221,6 +235,8 @@ export class ConfigurationsService {
               client24: (metrics.client24?.value as number) ?? null,
               client5: (metrics.client5?.value as number) ?? null,
               client6: (metrics.client6?.value as number) ?? null,
+              channel: (metrics.channel?.value as number) ?? null,
+              channel2: (metrics.channel2?.value as number) ?? null,
               status: StatusState.Mismatch,
               mismatchReason: ip,
               wlc: wlc,
@@ -252,6 +268,8 @@ export class ConfigurationsService {
               client24: (metrics.client24?.value as number) ?? null,
               client5: (metrics.client5?.value as number) ?? null,
               client6: (metrics.client6?.value as number) ?? null,
+              channel: (metrics.channel?.value as number) ?? null,
+              channel2: (metrics.channel2?.value as number) ?? null,
               status: config.problem ? StatusState.Maintenance : status,
               mismatchReason: null,
               wlc: wlc,
@@ -306,6 +324,8 @@ export class ConfigurationsService {
                 client24: (metrics.client24?.value as number) ?? null,
                 client5: (metrics.client5?.value as number) ?? null,
                 client6: (metrics.client6?.value as number) ?? null,
+                channel: (metrics.channel?.value as number) ?? null,
+                channel2: (metrics.channel2?.value as number) ?? null,
                 status: configToRemove.problem
                   ? StatusState.Maintenance
                   : status,
@@ -350,6 +370,8 @@ export class ConfigurationsService {
             client24: (metrics.client24?.value as number) ?? null,
             client5: (metrics.client5?.value as number) ?? null,
             client6: (metrics.client6?.value as number) ?? null,
+            channel: (metrics.channel?.value as number) ?? null,
+            channel2: (metrics.channel2?.value as number) ?? null,
             status: config.problem ? StatusState.Maintenance : status,
             mismatchReason: null,
             wlc: wlc,

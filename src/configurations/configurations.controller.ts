@@ -27,7 +27,7 @@ export class ConfigurationsController {
     return this.configurationsService.getDown();
   }
 
-  @Get('location')
+  @Get('detail')
   getDetail(
     @Query('sec') sec: string,
     @Query('entity') entity: string,

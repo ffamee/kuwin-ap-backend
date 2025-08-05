@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { InfluxService } from './influx.service';
 
 @Controller('influx')
@@ -10,6 +10,23 @@ export class InfluxController {
     return this.influxService.queryApLog(mac, period);
   }
 
+  @Get('graph')
+  getConfigGraph(
+    @Query('sec') sec: string,
+    @Query('entity') entity: string,
+    @Query('build') build: string,
+    @Query('loc') loc: string,
+    @Query('period') period?: string,
+  ) {
+    return this.influxService.queryConfigGraph(
+      +sec,
+      +entity,
+      +build,
+      +loc,
+      period,
+    );
+  }
+
   @Get('last')
   getLastPoint() {
     return this.influxService.queryApLastPoint();
@@ -18,15 +35,5 @@ export class InfluxController {
   @Get('ip')
   getApIp() {
     return this.influxService.queryIpLog();
-  }
-
-  @Get('test')
-  testInflux() {
-    return this.influxService.test();
-  }
-
-  @Post('write')
-  write(@Body() body: { num: string; group: string; name: string }) {
-    return this.influxService.write(+body.num, body.group, body.name);
   }
 }

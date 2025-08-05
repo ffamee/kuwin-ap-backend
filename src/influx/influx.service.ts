@@ -3,6 +3,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  NotFoundException,
   // NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -12,10 +13,9 @@ import {
   WriteApi,
   Point,
 } from '@influxdata/influxdb-client';
-import { AccesspointsService } from '../accesspoints/accesspoints.service';
 import { Metrics } from 'src/shared/types/snmp-metrics';
 import * as snmp from 'net-snmp';
-// import { ErrorState } from 'src/shared/types/define-state';
+import { ConfigurationsService } from 'src/configurations/configurations.service';
 
 @Injectable()
 export class InfluxService {
@@ -23,8 +23,8 @@ export class InfluxService {
   private readonly queryApi: QueryApi;
   constructor(
     private readonly configService: ConfigService,
-    @Inject(forwardRef(() => AccesspointsService))
-    private readonly accesspointsService: AccesspointsService,
+    @Inject(forwardRef(() => ConfigurationsService))
+    private readonly configurationsService: ConfigurationsService,
   ) {
     const url = this.configService.get<string>('INFLUX_URL');
     const token = this.configService.get<string>('INFLUX_TOKEN');
@@ -372,14 +372,44 @@ export class InfluxService {
   //   }
   // }
 
-  async test() {
-    const query = `
-			from(bucket: "test")
-				|> range(start: -15m)
-				|> filter(fn: (r) => r._measurement == "measure")
-				|> last()
-				|> group(columns: ["group", "num"], mode: "by")
-				|> sum()`;
+  async queryConfigGraph(
+    sec: number,
+    entity: number,
+    build: number,
+    loc: number,
+    period?: string,
+  ) {
+    if (!sec || !entity || !build || !loc) {
+      throw new ForbiddenException(
+        'Section, entity, building, and location IDs are required to query configuration graph',
+      );
+    }
+    if (!(await this.configurationsService.isExist(sec, entity, build, loc))) {
+      throw new NotFoundException(
+        `Configuration for section ${sec}, entity ${entity}, building ${build}, and location ${loc} does not exist`,
+      );
+    }
+    const query = `import "internal/debug"
+		from(bucket: "${this.configService.get<string>('INFLUX_BUCKET')}")
+			|> range(start: ${period || '-3h'})
+			|> filter(fn: (r) => r._measurement == "ap_metrics")
+			|> filter(fn: (r) => r.locationId == "${loc}")
+			|> group(columns: ["_field"], mode: "by")
+			|> pivot(
+						rowKey:["apId", "ipId", "locationId", "wlc", "_time"],
+						columnKey: ["_field"],
+						valueColumn: "_value"
+					)
+			|> map(fn: (r) => ({
+				r with
+					tx         : if exists r.tx then r.tx else debug.null(type: "int"),
+					rx         : if exists r.rx then r.rx else debug.null(type: "int"),
+					"client24"  : if exists r["client24"] then r["client24"] else debug.null(type: "int"),
+					"client5"   : if exists r["client5"] then r["client5"] else debug.null(type: "int"),
+					"client6"   : if exists r["client6"] then r["client6"] else debug.null(type: "int")
+				}))
+			|> drop(columns: ["_start", "_stop"])`;
+
     try {
       const result = await this.queryApi.collectRows(query);
       return result || null; // Return the last point or null if no points found
@@ -387,25 +417,5 @@ export class InfluxService {
       console.error('Error querying last point from InfluxDB:', error);
       throw new Error('Failed to query last point from InfluxDB');
     }
-  }
-
-  async write(num: number, group: string, name: string) {
-    const url = this.configService.get<string>('INFLUX_URL');
-    const token = this.configService.get<string>('INFLUX_TOKEN');
-    const org = this.configService.get<string>('INFLUX_ORG');
-
-    if (!url || !token || !org) {
-      throw new Error('InfluxDB configuration is missing');
-    }
-
-    const influxDB = new InfluxDB({ url, token });
-    const writeApi = influxDB.getWriteApi(org, 'test', 'ms');
-    const point = new Point('measure')
-      .tag('group', group)
-      .tag('name', name)
-      .intField('num', num);
-
-    writeApi.writePoint(point);
-    return await writeApi.flush();
   }
 }

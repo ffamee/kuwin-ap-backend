@@ -26,6 +26,7 @@ export class SnmpService {
     const oidAPStatus = '1.3.6.1.4.1.14179.2.2.1.1.6';
     const oidRadioStatus = '1.3.6.1.4.1.14179.2.2.2.1.12';
     const oidRadioBand = '1.3.6.1.4.1.9.9.513.1.2.1.1.27';
+    const oidChannel = '1.3.6.1.4.1.14179.2.2.2.1.4'; // Channel of the AP
     const oids = [
       oidClient,
       oidRx,
@@ -34,6 +35,7 @@ export class SnmpService {
       oidAPStatus,
       oidRadioStatus,
       oidRadioBand,
+      oidChannel,
     ];
     // await this.wlcPollingQueue.addBulk(
     //   wlcs.map((wlc) => ({
@@ -86,8 +88,5 @@ export class SnmpService {
     const queueEvent = new QueueEvents('wlc-polling-queue');
     await Promise.all(jobs.map((job) => job.job.waitUntilFinished(queueEvent)));
     console.timeEnd('SNMP polling jobs processing time');
-    // console.log('All SNMP polling jobs have been processed successfully!');
-    // await this.accessPointsService.updateSnapshot(); change to configurationService
-    // console.log('Update snapshot completed!');
   }
 }
