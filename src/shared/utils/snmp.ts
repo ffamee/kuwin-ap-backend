@@ -33,6 +33,8 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
   const radioStatusBaseOid = '1.3.6.1.4.1.14179.2.2.2.1.12.';
   const radioBandBaseOid = '1.3.6.1.4.1.9.9.513.1.2.1.1.27.';
   const channelBaseOid = '1.3.6.1.4.1.14179.2.2.2.1.4.'; // Channel of the AP
+  const ssidNameBaseOid = '1.3.6.1.4.1.9.9.512.1.1.1.1.4.'; // SSID Name in WLC
+  const ssidNumBaseOid = '1.3.6.1.4.1.14179.2.1.1.1.38.'; // No. of AP in each SSID
 
   // 1. ตรวจสอบเงื่อนไขสำหรับ 'client-2.4' หรือ 'client-5' หรือ 'client-6'
   // '1.3.6.1.4.1.14179.2.2.2.1.15.x.x.x.x.x.x.0' หรือ '.1' หรือ '.2'
@@ -144,6 +146,18 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
       result.name = 'channel';
       result.index = parts[6]; // เก็บ index เช่น '0', '1', '2'
     }
+  } else if (oid.startsWith(ssidNameBaseOid)) {
+    const remaining = oid.substring(ssidNameBaseOid.length); // baseOid.index
+    if (!remaining.includes('.')) {
+      result.name = 'ssid';
+      result.index = remaining; // เก็บ index เช่น '0', '1', '2'
+    }
+  } else if (oid.startsWith(ssidNumBaseOid)) {
+    const remaining = oid.substring(ssidNumBaseOid.length); // baseOid.index
+    if (!remaining.includes('.')) {
+      result.name = 'ssidAP';
+      result.index = remaining; // เก็บ index เช่น '0', '1', '2'
+    }
   }
 
   return result;
@@ -172,52 +186,63 @@ const feedCb = (
       }
       try {
         const name = resolveSnmpOid(varbind.oid);
-        if (!name.name || !name.macAddress) {
+        if (!name.name) {
           console.log(name);
           continue; // Skip if name or macAddress is not resolved
-        }
-        if (name.index) {
-          // treat it like object for keys '0', '1', '2' etc.
-          if (
-            data.has(name.macAddress) &&
-            Object.prototype.hasOwnProperty.call(
-              data.get(name.macAddress),
-              name.name,
-            )
-          ) {
-            const existing = data.get(name.macAddress) ?? {};
-            const val =
-              ((existing[name.name] as Metrics)?.value as Record<
-                string,
-                unknown
-              >) ?? {};
-            val[name.index] = varbind.value;
-            data.set(name.macAddress, {
-              ...data.get(name.macAddress),
+        } else if (!name.macAddress) {
+          if (name.index) {
+            data.set(name.index, {
+              ...data.get(name.index),
               [name.name]: {
-                value: val,
-                type: varbind.type,
-              },
-            });
-          } else {
-            data.set(name.macAddress, {
-              ...data.get(name.macAddress),
-              [name.name]: {
-                value: {
-                  [name.index]: varbind.value,
-                },
+                value: varbind.value,
                 type: varbind.type,
               },
             });
           }
-        } else
-          data.set(name.macAddress, {
-            ...data.get(name.macAddress),
-            [name.name]: {
-              value: varbind.value,
-              type: varbind.type,
-            },
-          });
+        } else {
+          if (name.index) {
+            // treat it like object for keys '0', '1', '2' etc.
+            if (
+              data.has(name.macAddress) &&
+              Object.prototype.hasOwnProperty.call(
+                data.get(name.macAddress),
+                name.name,
+              )
+            ) {
+              const existing = data.get(name.macAddress) ?? {};
+              const val =
+                ((existing[name.name] as Metrics)?.value as Record<
+                  string,
+                  unknown
+                >) ?? {};
+              val[name.index] = varbind.value;
+              data.set(name.macAddress, {
+                ...data.get(name.macAddress),
+                [name.name]: {
+                  value: val,
+                  type: varbind.type,
+                },
+              });
+            } else {
+              data.set(name.macAddress, {
+                ...data.get(name.macAddress),
+                [name.name]: {
+                  value: {
+                    [name.index]: varbind.value,
+                  },
+                  type: varbind.type,
+                },
+              });
+            }
+          } else
+            data.set(name.macAddress, {
+              ...data.get(name.macAddress),
+              [name.name]: {
+                value: varbind.value,
+                type: varbind.type,
+              },
+            });
+        }
       } catch (error) {
         console.error('Error resolving OID:', varbind.oid, error);
       }

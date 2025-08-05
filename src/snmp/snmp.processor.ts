@@ -4,7 +4,7 @@ import { InfluxService } from '../influx/influx.service';
 import { Metrics } from 'src/shared/types/snmp-metrics';
 import { StatusState } from 'src/shared/types/define-state';
 import { ConfigurationsService } from 'src/configurations/configurations.service';
-@Processor('wlc-polling-queue', { concurrency: 5 })
+@Processor('wlc-polling-queue', { concurrency: 6 })
 export class WlcPollingProcessor extends WorkerHost {
   private radioBand: { [key: string]: string };
   private statusSet: { [key: number]: StatusState };
@@ -24,8 +24,9 @@ export class WlcPollingProcessor extends WorkerHost {
     };
   }
 
-  async process(job: Job) {
-    // const deps = await job.getDependencies();
+  private async metricsJob(
+    job: Job,
+  ): Promise<{ wlcName: string; apNum: number }> {
     const { wlcName, wlcHost } = job.data as {
       wlcName: string;
       wlcHost: string;
@@ -48,17 +49,6 @@ export class WlcPollingProcessor extends WorkerHost {
       const { radio, band, client, status, channel, rx, tx, ip, ...rest } =
         metrics as Record<string, Metrics>;
       try {
-        // if (
-        //   radio &&
-        //   'value' in radio &&
-        //   band &&
-        //   'value' in band &&
-        //   client &&
-        //   'value' in client &&
-        //   status &&
-        //   'value' in status
-        // ) {
-        // data is complete
         let statusValue: StatusState = StatusState.Up;
         const radioValue = radio.value as Record<string, unknown>;
         const bandValue = band.value as Record<string, unknown>;
@@ -72,7 +62,7 @@ export class WlcPollingProcessor extends WorkerHost {
           Object.keys(radioValue).length !== Object.keys(channelValue).length
         ) {
           console.warn(
-            `Mismatch in radio, band, and client data for ${mac}. with lengths: radio=${
+            `Missing keys in radio, band, and client data for ${mac}. with lengths: radio=${
               Object.keys(radioValue).length
             }, band=${Object.keys(bandValue).length}, client=${
               Object.keys(clientValue).length
@@ -131,7 +121,7 @@ export class WlcPollingProcessor extends WorkerHost {
         let sumTx = 0;
         if (Object.keys(rxValue).length !== Object.keys(txValue).length) {
           console.warn(
-            `Mismatch in rx and tx data for ${mac}. with lengths: rx=${Object.keys(rxValue).length}, tx=${Object.keys(txValue).length}`,
+            `Missing keys in rx and tx data for ${mac}. with lengths: rx=${Object.keys(rxValue).length}, tx=${Object.keys(txValue).length}`,
           );
           continue;
         }
@@ -174,7 +164,6 @@ export class WlcPollingProcessor extends WorkerHost {
           // remove key 'mac' from data
           data.delete(mac);
         }
-        // }
       } catch (error) {
         console.error(`Error processing metrics for ${mac}:`, error, {
           radio,
@@ -189,9 +178,86 @@ export class WlcPollingProcessor extends WorkerHost {
         data.delete(mac); // remove entry if error occurs
       }
     }
-    // console.dir(data, { depth: null });
-    console.log(wlcHost, 'has', data.size);
-    return await this.influxService.writePoints('ap_metrics', wlcName, data);
+    await this.influxService.writePoints('ap_metrics', wlcName, data);
+    return { wlcName, apNum: data.size };
+  }
+
+  private async ssidJob(job: Job) {
+    const { wlcName } = job.data as {
+      wlcName: string;
+    };
+    const childJobs = await job.getChildrenValues();
+    const data = new Map<string, Record<string, unknown>>();
+    for (const v of Object.values(childJobs)) {
+      if (!v) continue;
+      const value = v as Record<string, Record<string, unknown>>;
+      for (const [index, metrics] of Object.entries(value)) {
+        // map key, value of metrics to const
+        const key = Object.keys(metrics)[0];
+        const value = Object.values(metrics)[0];
+        const existing = data.get(key) ?? {};
+        existing[index] = value;
+        data.set(key, existing);
+      }
+    }
+    try {
+      const ssid = data.get('ssid');
+      const ssidAP = data.get('ssidAP');
+      if (!ssid || !ssidAP) {
+        console.warn(`SSID or SSID AP data not found for WLC ${wlcName}`);
+        return null;
+      }
+      if (Object.keys(ssid).length !== Object.keys(ssidAP).length) {
+        console.warn(
+          `Mismatch in SSID and SSID AP data for WLC ${wlcName}. Skipping.`,
+        );
+        return null;
+      }
+      const name: Record<string, Metrics> = {};
+      for (const index of Object.keys(ssid)) {
+        const ssidData = ssid[index] as Metrics;
+        const ssidAPData = ssidAP[index] as Metrics;
+        if (!ssidData || !ssidAPData) {
+          console.warn(
+            `Missing SSID or SSID AP data for WLC ${wlcName} at index ${index}. Skipping.`,
+          );
+          continue;
+        }
+        const tmp = Buffer.from(ssidData.value as string, 'utf-8').toString(
+          'utf-8',
+        );
+        name[tmp] = {
+          value: ssidAPData.value,
+          type: ssidAPData.type,
+        };
+      }
+      // select only name with key 'KUWIN', 'KUWIN-IOT', 'eduroam'
+      const filteredName = new Map<string, Record<string, Metrics>>();
+      filteredName.set(wlcName, {
+        KUWIN: name['KUWIN'],
+        'KUWIN-IOT': name['KUWIN-IOT'],
+        eduroam: name['eduroam'],
+      });
+      return await this.influxService.writePoints(
+        'ap_ssid',
+        wlcName,
+        filteredName,
+      );
+    } catch (error) {
+      console.error(`Error processing SSID for WLC ${wlcName}:`, error);
+      return null;
+    }
+  }
+
+  async process(job: Job) {
+    switch (job.name) {
+      case 'metric-polling-job':
+        return this.metricsJob(job);
+      case 'ssid-polling-job':
+        return this.ssidJob(job);
+      default:
+        throw new Error(`Unknown job name: ${job.name}`);
+    }
   }
 
   @OnWorkerEvent('active')

@@ -73,18 +73,17 @@ export class InfluxService {
     data: Map<string, Record<string, unknown>>,
   ) {
     const points: Point[] = [];
-    for (const [mac, metrics] of data.entries()) {
+    for (const [key, metrics] of data.entries()) {
       try {
         const { apId, ipId, locationId, ...res } = metrics as {
-          apId: number;
-          ipId: number;
-          locationId: number;
+          apId?: number;
+          ipId?: number;
+          locationId?: number;
         } & Record<string, Metrics>;
-        const point = new Point(measurement)
-          .tag('apId', apId.toString())
-          .tag('ipId', ipId.toString())
-          .tag('locationId', locationId.toString())
-          .tag('wlc', wlc);
+        const point = new Point(measurement).tag('wlc', wlc);
+        if (apId) point.tag('apId', apId.toString());
+        if (ipId) point.tag('ipId', ipId.toString());
+        if (locationId) point.tag('locationId', locationId.toString());
 
         // iterate on others keys
         for (const [name, metric] of Object.entries(res)) {
@@ -130,7 +129,7 @@ export class InfluxService {
         points.push(point);
       } catch (error) {
         console.error(
-          `Error processing metrics for MAC ${mac}:`,
+          `Error processing metrics for Key ${key}:`,
           metrics,
           error,
         );

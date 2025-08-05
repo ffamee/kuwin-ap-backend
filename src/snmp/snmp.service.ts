@@ -27,7 +27,7 @@ export class SnmpService {
     const oidRadioStatus = '1.3.6.1.4.1.14179.2.2.2.1.12';
     const oidRadioBand = '1.3.6.1.4.1.9.9.513.1.2.1.1.27';
     const oidChannel = '1.3.6.1.4.1.14179.2.2.2.1.4'; // Channel of the AP
-    const oids = [
+    const metricOids = [
       oidClient,
       oidRx,
       oidTx,
@@ -37,6 +37,9 @@ export class SnmpService {
       oidRadioBand,
       oidChannel,
     ];
+    const oidSSIDName = '1.3.6.1.4.1.9.9.512.1.1.1.1.4';
+    const oidSSIDNum = '1.3.6.1.4.1.14179.2.1.1.1.38';
+    const ssidOids = [oidSSIDName, oidSSIDNum];
     // await this.wlcPollingQueue.addBulk(
     //   wlcs.map((wlc) => ({
     //     name: 'wlc',
@@ -49,16 +52,16 @@ export class SnmpService {
     //   })),
     // );
     console.time('SNMP polling jobs processing time');
-    const jobs = await this.flowProducer.addBulk(
+    const metricJobs = await this.flowProducer.addBulk(
       wlcs.map((wlc) => ({
-        name: 'wlc-polling-job',
+        name: 'metric-polling-job',
         queueName: 'wlc-polling-queue',
         data: {
           data: `WLC polling on Host ${wlc.host}`,
           wlcHost: wlc.host,
           wlcName: wlc.name,
         },
-        children: oids.map((oid) => ({
+        children: metricOids.map((oid) => ({
           name: 'oid-polling-job',
           data: {
             data: `SNMP polling on WLC ${wlc.host} for OID ${oid}`,
@@ -84,9 +87,48 @@ export class SnmpService {
         },
       })),
     );
-    console.log({ message: 'SNMP polling jobs added to the queue!' });
+    const ssidJobs = await this.flowProducer.addBulk(
+      wlcs.map((wlc) => ({
+        name: 'ssid-polling-job',
+        queueName: 'wlc-polling-queue',
+        data: {
+          data: `SSID polling on Host ${wlc.host}`,
+          wlcName: wlc.name,
+        },
+        children: ssidOids.map((oid) => ({
+          name: 'oid-polling-job',
+          data: {
+            data: `SNMP polling on WLC ${wlc.host} for OID ${oid}`,
+            wlcHost: wlc.host,
+            oid,
+          },
+          queueName: `oid-polling-queue-${wlc.name}`,
+          opts: {
+            // continueParentOnFailure: true,
+            removeOnComplete: { age: 180, count: 100 },
+            removeOnFail: { age: 180, count: 100 },
+            ignoreDependencyOnFailure: true,
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 1000, // 1 second
+            },
+          },
+        })),
+        opts: {
+          removeOnComplete: { age: 180, count: 100 },
+          removeOnFail: { age: 180, count: 100 },
+        },
+      })),
+    );
     const queueEvent = new QueueEvents('wlc-polling-queue');
-    await Promise.all(jobs.map((job) => job.job.waitUntilFinished(queueEvent)));
+    await Promise.all(
+      metricJobs.map((job) => job.job.waitUntilFinished(queueEvent)),
+    );
+    console.timeLog('SNMP polling jobs processing time', 'Done metrics jobs');
+    await Promise.all(
+      ssidJobs.map((job) => job.job.waitUntilFinished(queueEvent)),
+    );
     console.timeEnd('SNMP polling jobs processing time');
   }
 }
