@@ -337,6 +337,7 @@ export class BuildingsService {
       }
     } else {
       let filename = building.pic;
+      if (updateBuildingDto.entityId) delete updateBuildingDto.entityId;
       if (file) {
         await deleteFile(building.pic ?? 'default.png');
         filename = await saveFile(this.configService, file, 'buildings');

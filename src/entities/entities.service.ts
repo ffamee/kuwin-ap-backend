@@ -410,6 +410,7 @@ export class EntitiesService {
       }
     } else {
       let filename = entity.pic;
+      if (updateEntityDto.sectionId) delete updateEntityDto.sectionId;
       if (file) {
         await deleteFile(entity.pic);
         filename = await saveFile(this.configService, file, 'entities');
