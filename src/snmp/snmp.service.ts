@@ -2,13 +2,15 @@ import { InjectFlowProducer, InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { FlowProducer, Queue, QueueEvents } from 'bullmq';
+import { ConfigurationsService } from 'src/configurations/configurations.service';
 
 @Injectable()
 export class SnmpService {
   constructor(
-    @InjectQueue('wlc-polling-queue') private readonly wlcPollingQueue: Queue,
+    @InjectQueue('write-buffer-queue') private readonly writeBufferQueue: Queue,
     @InjectFlowProducer('wlc-polling-flow')
     private readonly flowProducer: FlowProducer,
+    private readonly configurationsService: ConfigurationsService,
   ) {}
 
   @Cron('*/5 * * * *')
@@ -52,6 +54,15 @@ export class SnmpService {
     //   })),
     // );
     console.time('SNMP polling jobs processing time');
+    const configAll = await this.configurationsService.count();
+    await this.writeBufferQueue.add(
+      'write-buffer-job',
+      { measurement: 'ap_count', key: 'all', value: configAll },
+      {
+        removeOnComplete: { age: 180, count: 100 },
+        removeOnFail: { age: 180, count: 100 },
+      },
+    );
     const metricJobs = await this.flowProducer.addBulk(
       wlcs.map((wlc) => ({
         name: 'metric-polling-job',

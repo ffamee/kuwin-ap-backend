@@ -40,24 +40,9 @@ export class InfluxService {
     this.queryApi = influxDB.getQueryApi(org);
   }
 
-  async writePoint(
-    measurement: string,
-    fields: Record<string, any>,
-    tags?: Record<string, string>,
-    timestamp?: Date,
-  ): Promise<void> {
+  async writePoint(measurement: string, key: string, value: number) {
     const point = new Point(measurement);
-    if (tags) {
-      Object.entries(tags).forEach(([key, value]) => point.tag(key, value));
-    }
-    Object.entries(fields).forEach(([key, value]) => {
-      if (key === 'ip') point.stringField(key, value);
-      else point.intField(key, value);
-    });
-
-    if (timestamp) {
-      point.timestamp(timestamp);
-    }
+    point.intField(key, value);
     try {
       this.writeApi.writePoint(point);
       return await this.writeApi.flush();

@@ -385,4 +385,8 @@ export class ConfigurationsService {
     }
     return null;
   }
+
+  async count() {
+    return await this.configurationsRepository.count();
+  }
 }

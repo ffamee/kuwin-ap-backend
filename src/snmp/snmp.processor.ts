@@ -1,6 +1,10 @@
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
-import { InfluxService } from '../influx/influx.service';
+import {
+  InjectQueue,
+  OnWorkerEvent,
+  Processor,
+  WorkerHost,
+} from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import { Metrics } from 'src/shared/types/snmp-metrics';
 import { StatusState } from 'src/shared/types/define-state';
 import { ConfigurationsService } from 'src/configurations/configurations.service';
@@ -9,8 +13,8 @@ export class WlcPollingProcessor extends WorkerHost {
   private radioBand: { [key: string]: string };
   private statusSet: { [key: number]: StatusState };
   constructor(
-    private readonly influxService: InfluxService,
     private readonly configurationsService: ConfigurationsService,
+    @InjectQueue('write-buffer-queue') private readonly writeBufferQueue: Queue,
   ) {
     super();
     this.radioBand = {
@@ -26,7 +30,8 @@ export class WlcPollingProcessor extends WorkerHost {
 
   private async metricsJob(
     job: Job,
-  ): Promise<{ wlcName: string; apNum: number }> {
+    // ): Promise<{ wlcName: string; apNum: number }> {
+  ) {
     const { wlcName, wlcHost } = job.data as {
       wlcName: string;
       wlcHost: string;
@@ -178,8 +183,27 @@ export class WlcPollingProcessor extends WorkerHost {
         data.delete(mac); // remove entry if error occurs
       }
     }
-    await this.influxService.writePoints('ap_metrics', wlcName, data);
-    return { wlcName, apNum: data.size };
+    await this.writeBufferQueue.add(
+      'writes-buffer-job',
+      {
+        measurement: 'ap_metrics',
+        wlcName,
+        data: Object.fromEntries(data),
+      },
+      {
+        removeOnComplete: { age: 180, count: 100 },
+        removeOnFail: { age: 180, count: 100 },
+      },
+    );
+    await this.writeBufferQueue.add(
+      'write-buffer-job',
+      { measurement: 'ap_count', key: wlcName, value: data.size },
+      {
+        removeOnComplete: { age: 180, count: 100 },
+        removeOnFail: { age: 180, count: 100 },
+      },
+    );
+    // return { wlcName, apNum: data.size };
   }
 
   private async ssidJob(job: Job) {
@@ -238,10 +262,17 @@ export class WlcPollingProcessor extends WorkerHost {
         'KUWIN-IOT': name['KUWIN-IOT'],
         eduroam: name['eduroam'],
       });
-      return await this.influxService.writePoints(
-        'ap_ssid',
-        wlcName,
-        filteredName,
+      await this.writeBufferQueue.add(
+        'writes-buffer-job',
+        {
+          measurement: 'ap_ssid',
+          wlcName,
+          data: Object.fromEntries(filteredName),
+        },
+        {
+          removeOnComplete: { age: 180, count: 100 },
+          removeOnFail: { age: 180, count: 100 },
+        },
       );
     } catch (error) {
       console.error(`Error processing SSID for WLC ${wlcName}:`, error);
