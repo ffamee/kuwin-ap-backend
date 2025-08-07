@@ -21,6 +21,7 @@ import {
 } from 'src/shared/sql-query/query';
 import { Metrics } from 'src/shared/types/snmp-metrics';
 import { AccesspointsService } from 'src/accesspoints/accesspoints.service';
+import { History } from 'src/histories/entities/history.entity';
 
 @Injectable()
 export class ConfigurationsService {
@@ -85,6 +86,47 @@ export class ConfigurationsService {
       throw new InternalServerErrorException(
         `An error occurred while creating the configuration,
         ${error}`,
+      );
+    }
+  }
+
+  async remove(id: number) {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const config = await manager.findOne(Configuration, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+          relations: ['ip', 'location', 'accesspoint'],
+          select: {
+            accesspoint: { id: true },
+            ip: { id: true },
+            location: { id: true },
+          },
+        });
+        if (!config) {
+          throw new NotFoundException(`Configuration with ID ${id} not found`);
+        }
+        // create new history record after delete
+        if (config.status !== StatusState.Pending) {
+          await manager.insert(History, {
+            configId: config.id,
+            startedAt: config.createdAt,
+            accesspoint: config.accesspoint,
+            ip: config.ip,
+            location: config.location,
+          });
+        }
+        await manager.remove(Configuration, config);
+        return {
+          message: `Configuration with ID ${id} removed successfully`,
+        };
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `An error occurred while removing the configuration with ID ${id}, ${error}`,
       );
     }
   }

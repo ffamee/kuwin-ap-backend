@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   Query,
   UploadedFiles,
@@ -80,5 +82,10 @@ export class ConfigurationsController {
     createConfigurationDto: { name: string; buildingId: number; ip: string },
   ) {
     console.dir({ files, createConfigurationDto }, { depth: null });
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.configurationsService.remove(+id);
   }
 }
