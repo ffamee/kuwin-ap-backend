@@ -126,12 +126,12 @@ export class ConfigurationsService {
     sec: number,
     entity: number,
     build: number,
-    loc: number,
+    config: number,
   ): Promise<Configuration> {
     const configuration = await this.configurationsRepository.findOne({
       where: {
+        id: config,
         location: {
-          id: loc,
           building: { id: build, entity: { id: entity, section: { id: sec } } },
         },
       },
@@ -147,9 +147,7 @@ export class ConfigurationsService {
       },
     });
     if (!configuration) {
-      throw new NotFoundException(
-        `Configuration in location ID ${loc} not found`,
-      );
+      throw new NotFoundException(`Configuration ID ${config} not found`);
     }
     return configuration;
   }

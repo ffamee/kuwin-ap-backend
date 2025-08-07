@@ -166,7 +166,7 @@ export class BuildingsService {
   async getBuildingById(id: number): Promise<Building> {
     const building = await this.buildingRepository.findOne({
       where: { id },
-      relations: ['entity', 'accesspoints'],
+      relations: ['entity', 'locations'],
     });
     if (!building) {
       throw new NotFoundException(`Building with ID ${id} not found`);
@@ -210,7 +210,7 @@ export class BuildingsService {
   async remove(id: number) {
     const building = await this.buildingRepository.findOne({
       where: { id },
-      relations: ['accesspoints'],
+      relations: ['locations'],
     });
     if (!building) {
       throw new NotFoundException(`Building with ID ${id} not found`);

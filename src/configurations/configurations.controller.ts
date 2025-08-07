@@ -32,9 +32,9 @@ export class ConfigurationsController {
     @Query('sec') sec: string,
     @Query('entity') entity: string,
     @Query('build') build: string,
-    @Query('loc') loc: string,
+    @Query('config') config: string,
   ) {
-    return this.configurationsService.getDetail(+sec, +entity, +build, +loc);
+    return this.configurationsService.getDetail(+sec, +entity, +build, +config);
   }
 
   @Post('create')
