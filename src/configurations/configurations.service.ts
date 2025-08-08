@@ -192,7 +192,7 @@ export class ConfigurationsService {
           building: { id: true, name: true },
           histories: true,
         },
-        accesspoint: { id: true, name: true },
+        accesspoint: true,
       },
     });
     if (!configuration) {
