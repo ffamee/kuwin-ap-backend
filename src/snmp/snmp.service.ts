@@ -186,10 +186,7 @@ export class SnmpService {
             result: Object.entries(result).find(([_mac, item]) => {
               const val = item.clientIp as Metrics;
               return (
-                val &&
-                val.value &&
-                val.value !== '0.0.0.0' &&
-                val.value === '10.31.93.248'
+                val && val.value && val.value !== '0.0.0.0' && val.value === ip
               );
             }),
           };
