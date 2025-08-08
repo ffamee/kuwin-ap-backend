@@ -54,7 +54,7 @@ export class ConfigurationsService {
     }
 
     try {
-      await this.dataSource.transaction(async (manager) => {
+      return await this.dataSource.transaction(async (manager) => {
         const ip = await this.ipService.getIp(manager, configuration.ip);
         if (!ip) {
           throw new ConflictException(
@@ -71,7 +71,7 @@ export class ConfigurationsService {
             'Location not found or could not be created',
           );
         }
-        return await manager.insert(Configuration, {
+        return await manager.save(Configuration, {
           ip: { id: ip },
           location: { id: location },
         });
