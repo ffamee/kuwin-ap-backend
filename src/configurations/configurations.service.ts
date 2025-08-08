@@ -71,9 +71,22 @@ export class ConfigurationsService {
             'Location not found or could not be created',
           );
         }
-        return await manager.save(Configuration, {
+        const raw = await manager.insert(Configuration, {
           ip: { id: ip },
           location: { id: location },
+        });
+        const configId = (raw.identifiers[0] as { id: number }).id;
+        return manager.findOne(Configuration, {
+          where: { id: configId },
+          relations: ['ip', 'location', 'accesspoint'],
+          select: {
+            ip: { id: true, ip: true },
+            location: {
+              id: true,
+              name: true,
+            },
+            accesspoint: { id: true, name: true },
+          },
         });
       });
     } catch (error) {
