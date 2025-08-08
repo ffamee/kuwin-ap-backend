@@ -168,28 +168,37 @@ export class ConfigurationsService {
     sec: number,
     entity: number,
     build: number,
-    config: number,
+    loc: number,
   ): Promise<Configuration> {
     const configuration = await this.configurationsRepository.findOne({
       where: {
-        id: config,
         location: {
+          id: loc,
           building: { id: build, entity: { id: entity, section: { id: sec } } },
         },
       },
-      relations: ['ip', 'location', 'location.building', 'accesspoint'],
+      relations: [
+        'ip',
+        'location',
+        'location.building',
+        'location.histories',
+        'accesspoint',
+      ],
       select: {
         ip: { id: true, ip: true },
         location: {
           id: true,
           name: true,
           building: { id: true, name: true },
+          histories: true,
         },
         accesspoint: { id: true, name: true },
       },
     });
     if (!configuration) {
-      throw new NotFoundException(`Configuration ID ${config} not found`);
+      throw new NotFoundException(
+        `Configuration in location ID ${loc} not found`,
+      );
     }
     return configuration;
   }
