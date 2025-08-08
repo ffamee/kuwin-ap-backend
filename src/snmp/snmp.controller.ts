@@ -18,6 +18,6 @@ export class SnmpController {
       socket: req.socket.remoteAddress,
       message: `Your IP is ${req.ip} ${req.get('X-Forwarded-For') ? `and forwarded IP is ${req.get('X-Forwarded-For')}` : ''}`,
     });
-    return this.snmpService.findAPClient(ip);
+    return this.snmpService.findAPClient(req.get('X-Forwarded-For'));
   }
 }

@@ -1,5 +1,9 @@
 import { InjectFlowProducer, InjectQueue } from '@nestjs/bullmq';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { FlowProducer, Queue, QueueEvents } from 'bullmq';
 import { ConfigurationsService } from 'src/configurations/configurations.service';
@@ -148,7 +152,10 @@ export class SnmpService {
     console.timeEnd('SNMP polling jobs processing time');
   }
 
-  async findAPClient(ip: string) {
+  async findAPClient(ip: string | undefined) {
+    if (!ip) {
+      throw new BadRequestException('IP address is required');
+    }
     const macToDec = (mac: string): string => {
       return mac
         .split(':')
