@@ -35,6 +35,7 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
   const channelBaseOid = '1.3.6.1.4.1.14179.2.2.2.1.4.'; // Channel of the AP
   const ssidNameBaseOid = '1.3.6.1.4.1.9.9.512.1.1.1.1.4.'; // SSID Name in WLC
   const ssidNumBaseOid = '1.3.6.1.4.1.14179.2.1.1.1.38.'; // No. of AP in each SSID
+  const clientIpBaseOid = '1.3.6.1.4.1.14179.2.1.4.1.2.';
 
   // 1. ตรวจสอบเงื่อนไขสำหรับ 'client-2.4' หรือ 'client-5' หรือ 'client-6'
   // '1.3.6.1.4.1.14179.2.2.2.1.15.x.x.x.x.x.x.0' หรือ '.1' หรือ '.2'
@@ -157,6 +158,15 @@ const resolveSnmpOid = (oid: string): ResolvedOid => {
     if (!remaining.includes('.')) {
       result.name = 'ssidAP';
       result.index = remaining; // เก็บ index เช่น '0', '1', '2'
+    }
+  } else if (oid.startsWith(clientIpBaseOid)) {
+    const remaining = oid.substring(clientIpBaseOid.length); // x.x.x.x.x.x
+    const parts = remaining.split('.');
+    if (parts.length === 6) {
+      // ต้องมี 6 หลัก MAC
+      const oidMac = parts.join('.');
+      result.macAddress = convertOidMacToStandard(oidMac);
+      result.name = 'clientIp';
     }
   }
 

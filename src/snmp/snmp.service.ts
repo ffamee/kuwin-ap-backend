@@ -1,8 +1,13 @@
 import { InjectFlowProducer, InjectQueue } from '@nestjs/bullmq';
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { FlowProducer, Queue, QueueEvents } from 'bullmq';
 import { ConfigurationsService } from 'src/configurations/configurations.service';
+
+import * as snmp from 'net-snmp';
+import { get, walk } from 'src/shared/utils/snmp';
+import { Metrics } from 'src/shared/types/snmp-metrics';
+import { Not } from 'typeorm';
 
 @Injectable()
 export class SnmpService {
@@ -13,7 +18,7 @@ export class SnmpService {
     private readonly configurationsService: ConfigurationsService,
   ) {}
 
-  @Cron('*/5 * * * *')
+  // @Cron('*/5 * * * *')
   async getSnmp() {
     const wlcs = [
       { name: 'wlc-1', host: '172.16.26.10' },
@@ -141,5 +146,92 @@ export class SnmpService {
       ssidJobs.map((job) => job.job.waitUntilFinished(queueEvent)),
     );
     console.timeEnd('SNMP polling jobs processing time');
+  }
+
+  async findAPClient(ip: string) {
+    const macToDec = (mac: string): string => {
+      return mac
+        .split(':')
+        .map((octet) => parseInt(octet, 16))
+        .join('.');
+    };
+    const wlcs = [
+      { name: 'wlc-1', host: '172.16.26.10' },
+      { name: 'wlc-2', host: '172.16.26.12' },
+      // { name: 'wlc-3', host: '172.16.26.16' },
+      { name: 'wlc-4', host: '172.16.26.11' },
+    ];
+    try {
+      const oids = '1.3.6.1.4.1.14179.2.1.4.1.2';
+      // console.time();
+      const results = await Promise.all(
+        wlcs.map(async (wlc) => {
+          const session = snmp.createSession(wlc.host, 'KUWINTEST', {
+            version: snmp.Version['2c'],
+          });
+          const result = (await walk(session, oids)) as Record<
+            string,
+            { clientIp: unknown }
+          >;
+          session.close();
+          return { host: wlc.host, result };
+        }),
+      );
+      // console.timeLog();
+      // Filter results to find the client IP and save to clientIp as only record that matches
+      const clientIp = results
+        .map(({ host, result }) => {
+          return {
+            host,
+            result: Object.entries(result).find(([_mac, item]) => {
+              const val = item.clientIp as Metrics;
+              return (
+                val &&
+                val.value &&
+                val.value !== '0.0.0.0' &&
+                val.value === '10.31.93.248'
+              );
+            }),
+          };
+        })
+        .filter(({ result }) => result !== undefined);
+      if (clientIp[0]) {
+        const { host, result } = clientIp[0] as {
+          host: string;
+          result: [string, { clientIp: unknown }];
+        };
+        const session = snmp.createSession(host, 'KUWINTEST', {
+          version: snmp.Version['2c'],
+        });
+        const apOid = [
+          '1.3.6.1.4.1.14179.2.1.4.1.3' + '.' + macToDec(result[0]),
+          '1.3.6.1.4.1.14179.2.1.4.1.4' + '.' + macToDec(result[0]),
+        ];
+        const [username, apRadMac] = await Promise.all(
+          apOid.map((oid) => get(session, oid)),
+        );
+        session.close();
+        const ap = await this.configurationsService.findClientAp(
+          Buffer.from(apRadMac as string, 'hex')
+            .toString('hex')
+            .replace(/(.{2})(?=.)/g, '$1:'),
+        );
+        // console.timeEnd();
+        if (ap) {
+          return {
+            username: Buffer.from(username as string, 'utf-8').toString(
+              'utf-8',
+            ),
+            apRadMac: ap,
+            clientIp: (result[1].clientIp as Metrics).value,
+          };
+        }
+        throw new NotFoundException('No AP found for the specified client IP');
+      }
+      throw new NotFoundException('No client found with the specified IP');
+    } catch (error) {
+      console.error('Error finding AP client:', error);
+      throw error;
+    }
   }
 }

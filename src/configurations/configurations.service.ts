@@ -440,4 +440,16 @@ export class ConfigurationsService {
   async count() {
     return await this.configurationsRepository.count();
   }
+
+  async findClientAp(mac: string) {
+    return this.configurationsRepository.findOne({
+      where: { accesspoint: { radMac: mac } },
+      relations: ['accesspoint', 'location', 'location.building'],
+      select: {
+        id: true,
+        accesspoint: { id: true, name: true },
+        location: { id: true, name: true, building: { id: true, name: true } },
+      },
+    });
+  }
 }
