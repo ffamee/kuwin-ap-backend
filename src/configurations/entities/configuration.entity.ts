@@ -55,7 +55,7 @@ export class Configuration {
     unsigned: true,
     default: null,
   })
-  tx: number | null;
+  tx: bigint | null;
 
   @Column('bigint', {
     name: 'rx',
@@ -63,7 +63,7 @@ export class Configuration {
     unsigned: true,
     default: null,
   })
-  rx: number | null;
+  rx: bigint | null;
 
   @Column('int', {
     name: 'client_24',

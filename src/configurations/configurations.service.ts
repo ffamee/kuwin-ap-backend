@@ -254,7 +254,8 @@ export class ConfigurationsService {
     ipId: number;
     locationId: number;
   } | null> {
-    const { mac, wlc, host, status, ip, ...metrics } = data as {
+    const { vendor, mac, wlc, host, status, ip, ...metrics } = data as {
+      vendor: string;
       mac: string;
       wlc: string;
       host: string;
@@ -273,15 +274,16 @@ export class ConfigurationsService {
         select: {
           ip: { id: true },
           location: { id: true },
-          accesspoint: { id: true, radMac: true },
+          accesspoint: { id: true, ethMac: true, radMac: true },
         },
       });
       // console.log(config);
       if (!config) {
         // handle case config not found from ip
+        const cond = vendor === 'cisco' ? 'radMac' : 'ethMac';
         const configMac = await this.configurationsRepository.findOne({
           where: {
-            accesspoint: { radMac: mac },
+            accesspoint: { [cond]: mac },
           },
           relations: ['ip', 'location', 'accesspoint'],
         });
@@ -292,8 +294,8 @@ export class ConfigurationsService {
           );
           await this.dataSource.transaction(async (manager) => {
             await manager.update(Configuration, configMac.id, {
-              tx: (metrics.tx?.value as number) ?? null,
-              rx: (metrics.rx?.value as number) ?? null,
+              tx: (metrics.tx?.value as bigint) ?? null,
+              rx: (metrics.rx?.value as bigint) ?? null,
               client24: (metrics.client24?.value as number) ?? null,
               client5: (metrics.client5?.value as number) ?? null,
               client6: (metrics.client6?.value as number) ?? null,
@@ -317,7 +319,10 @@ export class ConfigurationsService {
         }
       } else if (config.accesspoint) {
         // handle case config found with accesspoint
-        const configMac = config.accesspoint.radMac;
+        const configMac =
+          vendor === 'cisco'
+            ? config.accesspoint.radMac
+            : config.accesspoint.ethMac;
         if (configMac && configMac === mac) {
           // current config is not changed
           await this.configurationsRepository.update(
@@ -325,8 +330,8 @@ export class ConfigurationsService {
               id: config.id,
             },
             {
-              tx: (metrics.tx?.value as number) ?? null,
-              rx: (metrics.rx?.value as number) ?? null,
+              tx: (metrics.tx?.value as bigint) ?? null,
+              rx: (metrics.rx?.value as bigint) ?? null,
               client24: (metrics.client24?.value as number) ?? null,
               client5: (metrics.client5?.value as number) ?? null,
               client6: (metrics.client6?.value as number) ?? null,
@@ -358,6 +363,7 @@ export class ConfigurationsService {
               // create new config with old ip and old location with new ap
               const ap = await this.accesspointsService.getAp(
                 manager,
+                vendor,
                 mac,
                 host,
               );
@@ -381,8 +387,8 @@ export class ConfigurationsService {
                 ip: { id: configToRemove.ip.id },
                 location: { id: configToRemove.location.id },
                 accesspoint: { id: ap },
-                tx: (metrics.tx?.value as number) ?? null,
-                rx: (metrics.rx?.value as number) ?? null,
+                tx: (metrics.tx?.value as bigint) ?? null,
+                rx: (metrics.rx?.value as bigint) ?? null,
                 client24: (metrics.client24?.value as number) ?? null,
                 client5: (metrics.client5?.value as number) ?? null,
                 client6: (metrics.client6?.value as number) ?? null,
@@ -411,7 +417,12 @@ export class ConfigurationsService {
       } else {
         // handle case config found without accesspoint -> expected to be created new accesspoint record
         await this.dataSource.transaction(async (manager) => {
-          const ap = await this.accesspointsService.getAp(manager, mac, host);
+          const ap = await this.accesspointsService.getAp(
+            manager,
+            vendor,
+            mac,
+            host,
+          );
           if (!ap) {
             throw new InternalServerErrorException(
               `Failed to get or create access point with MAC ${mac} and host ${host}`,
@@ -427,8 +438,8 @@ export class ConfigurationsService {
             );
           }
           await manager.update(Configuration, config.id, {
-            tx: (metrics.tx?.value as number) ?? null,
-            rx: (metrics.rx?.value as number) ?? null,
+            tx: (metrics.tx?.value as bigint) ?? null,
+            rx: (metrics.rx?.value as bigint) ?? null,
             client24: (metrics.client24?.value as number) ?? null,
             client5: (metrics.client5?.value as number) ?? null,
             client6: (metrics.client6?.value as number) ?? null,

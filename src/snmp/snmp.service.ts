@@ -7,11 +7,17 @@ import {
 import { Cron } from '@nestjs/schedule';
 import { FlowProducer, Queue, QueueEvents } from 'bullmq';
 import { ConfigurationsService } from 'src/configurations/configurations.service';
-
 import * as snmp from 'net-snmp';
 import { get, walk } from 'src/shared/utils/snmp';
 import { Metrics } from 'src/shared/types/snmp-metrics';
-import { Not } from 'typeorm';
+import { wlcs } from 'src/shared/defined/constants';
+import {
+  oids,
+  metricsOid,
+  ssidsOid,
+  OidKey,
+  Vendor,
+} from 'src/shared/defined/oid';
 
 @Injectable()
 export class SnmpService {
@@ -22,46 +28,8 @@ export class SnmpService {
     private readonly configurationsService: ConfigurationsService,
   ) {}
 
-  // @Cron('*/5 * * * *')
+  @Cron('*/5 * * * *')
   async getSnmp() {
-    const wlcs = [
-      { name: 'wlc-1', host: '172.16.26.10' },
-      { name: 'wlc-2', host: '172.16.26.12' },
-      // { name: 'wlc-3', host: '172.16.26.16' },
-      { name: 'wlc-4', host: '172.16.26.11' },
-    ];
-    const oidClient = '1.3.6.1.4.1.14179.2.2.2.1.15'; // No. of clients connected to AP
-    const oidRx = '1.3.6.1.4.1.9.9.513.1.2.2.1.13'; // Rx bytes
-    const oidTx = '1.3.6.1.4.1.9.9.513.1.2.2.1.14'; // Tx bytes
-    const oidIp = '1.3.6.1.4.1.14179.2.2.1.1.19'; // IP address of AP
-    const oidAPStatus = '1.3.6.1.4.1.14179.2.2.1.1.6';
-    const oidRadioStatus = '1.3.6.1.4.1.14179.2.2.2.1.12';
-    const oidRadioBand = '1.3.6.1.4.1.9.9.513.1.2.1.1.27';
-    const oidChannel = '1.3.6.1.4.1.14179.2.2.2.1.4'; // Channel of the AP
-    const metricOids = [
-      oidClient,
-      oidRx,
-      oidTx,
-      oidIp,
-      oidAPStatus,
-      oidRadioStatus,
-      oidRadioBand,
-      oidChannel,
-    ];
-    const oidSSIDName = '1.3.6.1.4.1.9.9.512.1.1.1.1.4';
-    const oidSSIDNum = '1.3.6.1.4.1.14179.2.1.1.1.38';
-    const ssidOids = [oidSSIDName, oidSSIDNum];
-    // await this.wlcPollingQueue.addBulk(
-    //   wlcs.map((wlc) => ({
-    //     name: 'wlc',
-    //     data: {
-    //       data: `This is a test job for SNMP polling on WLC ${wlc.host}`,
-    //       wlcName: wlc.name,
-    //       wlcHost: wlc.host,
-    //       oids,
-    //     },
-    //   })),
-    // );
     console.time('SNMP polling jobs processing time');
     const configAll = await this.configurationsService.count();
     await this.writeBufferQueue.add(
@@ -74,19 +42,20 @@ export class SnmpService {
     );
     const metricJobs = await this.flowProducer.addBulk(
       wlcs.map((wlc) => ({
-        name: 'metric-polling-job',
+        name: `metric-polling-job`,
         queueName: 'wlc-polling-queue',
         data: {
           data: `WLC polling on Host ${wlc.host}`,
           wlcHost: wlc.host,
           wlcName: wlc.name,
+          wlcVendor: wlc.vendor,
         },
-        children: metricOids.map((oid) => ({
+        children: metricsOid.map((key) => ({
           name: 'oid-polling-job',
           data: {
-            data: `SNMP polling on WLC ${wlc.host} for OID ${oid}`,
+            data: `SNMP polling on WLC ${wlc.host} for OID ${key}`,
             wlcHost: wlc.host,
-            oid,
+            oid: oids[wlc.vendor][key].oid,
           },
           queueName: `oid-polling-queue-${wlc.name}`,
           opts: {
@@ -109,18 +78,20 @@ export class SnmpService {
     );
     const ssidJobs = await this.flowProducer.addBulk(
       wlcs.map((wlc) => ({
-        name: 'ssid-polling-job',
+        name: `ssid-${wlc.vendor}-polling-job`,
         queueName: 'wlc-polling-queue',
         data: {
           data: `SSID polling on Host ${wlc.host}`,
           wlcName: wlc.name,
+          wlcVendor: wlc.vendor,
         },
-        children: ssidOids.map((oid) => ({
+        children: ssidsOid[wlc.vendor].map((key: OidKey<Vendor>) => ({
           name: 'oid-polling-job',
           data: {
-            data: `SNMP polling on WLC ${wlc.host} for OID ${oid}`,
+            data: `SNMP polling on WLC ${wlc.host} for OID ${key}`,
             wlcHost: wlc.host,
-            oid,
+            wlcVendor: wlc.vendor,
+            oid: oids[wlc.vendor][key].oid,
           },
           queueName: `oid-polling-queue-${wlc.name}`,
           opts: {
@@ -185,7 +156,6 @@ export class SnmpService {
         }),
       );
       // console.timeLog();
-      // Filter results to find the client IP and save to clientIp as only record that matches
       const clientIp = results
         .map(({ host, result }) => {
           return {
@@ -193,7 +163,10 @@ export class SnmpService {
             result: Object.entries(result).find(([_mac, item]) => {
               const val = item.clientIp as Metrics;
               return (
-                val && val.value && val.value !== '0.0.0.0' && val.value === ip
+                val &&
+                val.value &&
+                val.value !== '0.0.0.0' &&
+                val.value === '10.31.93.248'
               );
             }),
           };
@@ -237,5 +210,17 @@ export class SnmpService {
       console.error('Error finding AP client:', error);
       throw error;
     }
+  }
+
+  async testSnmp(oid: string) {
+    const session = snmp.createSession('172.16.26.16', 'KUWINTEST', {
+      version: snmp.Version['2c'],
+    });
+    const result = (await walk(session, oid)) as Record<
+      string,
+      Record<string, Metrics>
+    >;
+    session.close();
+    return result;
   }
 }

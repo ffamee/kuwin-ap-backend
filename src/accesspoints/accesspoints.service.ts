@@ -8,6 +8,7 @@ import { Accesspoint } from './entities/accesspoint.entity';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import * as snmp from 'net-snmp';
 import { get } from 'src/shared/utils/snmp';
+import { oids } from 'src/shared/defined/oid';
 // import { ErrorState } from 'src/shared/types/define-state';
 
 @Injectable()
@@ -25,28 +26,40 @@ export class AccesspointsService {
       .join('.');
   }
 
-  private async create(manager: EntityManager, radMac: string, host: string) {
+  private async create(
+    manager: EntityManager,
+    vendor: string,
+    mac: string,
+    host: string,
+  ) {
     try {
       const session = snmp.createSession(host, 'KUWINTEST', {
         version: snmp.Version['2c'],
       });
-      const decMac = this.macToDec(radMac);
-      const oids = [
-        '1.3.6.1.4.1.14179.2.2.1.1.3' + '.' + decMac, // ap name
-        '1.3.6.1.4.1.14179.2.2.1.1.16' + '.' + decMac, // model
-        '1.3.6.1.4.1.14179.2.2.1.1.17' + '.' + decMac, // serial
-        '1.3.6.1.4.1.14179.2.2.1.1.31' + '.' + decMac, // ios version
-        '1.3.6.1.4.1.14179.2.2.1.1.33' + '.' + decMac, // eth mac
+      const decMac = this.macToDec(mac);
+      const list = oids[vendor as keyof typeof oids];
+      const oid = [
+        list.apNameBaseOid.oid + '.' + decMac, // ap name
+        list.apModelBaseOid.oid + '.' + decMac, // model
+        list.apSerialBaseOid.oid + '.' + decMac, // serial
+        list.apIosBaseOid.oid + '.' + decMac, // ios version
+        list.apEthMacBaseOid.oid + '.' + decMac, // eth mac
+        list.apRadMacBaseOid.oid +
+          '.' +
+          decMac +
+          `${vendor === 'cisco' ? '' : '.1'}`, // rad mac
       ];
-      const [name, model, serial, ios, ethMac] = await Promise.all(
-        oids.map((oid) => get(session, oid)),
+      const [name, model, serial, ios, ethMac, radMac] = await Promise.all(
+        oid.map((o) => get(session, o)),
       );
       const ap = manager.create(Accesspoint, {
         name: Buffer.from(name as string, 'utf-8').toString('utf-8'),
         model: Buffer.from(model as string, 'utf-8').toString('utf-8'),
         serial: Buffer.from(serial as string, 'utf-8').toString('utf-8'),
         ios: Buffer.from(ios as string, 'utf-8').toString('utf-8'),
-        radMac: radMac,
+        radMac: Buffer.from(radMac as string, 'hex')
+          .toString('hex')
+          .replace(/(.{2})(?=.)/g, '$1:'),
         ethMac: Buffer.from(ethMac as string, 'hex')
           .toString('hex')
           .replace(/(.{2})(?=.)/g, '$1:'),
@@ -82,17 +95,19 @@ export class AccesspointsService {
   // function to get AP id by MAC address, if not exists, create it
   async getAp(
     manager: EntityManager,
-    radMac: string,
+    vendor: string,
+    mac: string,
     host: string,
   ): Promise<number | null> {
+    const cond = vendor === 'cisco' ? 'radMac' : 'ethMac';
     const existingAp = await manager.findOne(Accesspoint, {
-      where: { radMac },
+      where: { [cond]: mac },
       select: ['id'],
     });
     if (existingAp) {
       return existingAp.id;
     } else {
-      const res = await this.create(manager, radMac, host);
+      const res = await this.create(manager, vendor, mac, host);
       if (res instanceof Accesspoint) {
         return res.id;
       }

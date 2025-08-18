@@ -8,10 +8,10 @@ import { Job, Queue } from 'bullmq';
 import { Metrics } from 'src/shared/types/snmp-metrics';
 import { StatusState } from 'src/shared/types/define-state';
 import { ConfigurationsService } from 'src/configurations/configurations.service';
+import { ssidWatchList } from 'src/shared/defined/constants';
 @Processor('wlc-polling-queue', { concurrency: 6 })
 export class WlcPollingProcessor extends WorkerHost {
   private radioBand: { [key: string]: string };
-  private statusSet: { [key: number]: StatusState };
   constructor(
     private readonly configurationsService: ConfigurationsService,
     @InjectQueue('write-buffer-queue') private readonly writeBufferQueue: Queue,
@@ -22,19 +22,38 @@ export class WlcPollingProcessor extends WorkerHost {
       '2': '5',
       '3': '6',
     };
-    this.statusSet = {
+  }
+
+  private checkRoff(vendor: string, radio: number) {
+    return (
+      (vendor === 'cisco' && radio !== 2) ||
+      (vendor === 'huawei' && radio !== 1)
+    );
+  }
+
+  private checkStatus(vendor: string, status: number, temp: StatusState) {
+    const ciscoStatus = {
       2: StatusState.Down,
       3: StatusState.Download,
     };
+    if (vendor === 'cisco') {
+      return status === 1
+        ? temp
+        : ciscoStatus[status as keyof typeof ciscoStatus];
+    } else if (vendor === 'huawei') {
+      return status === 8 ? temp : StatusState.Down;
+    }
+    return temp;
   }
 
   private async metricsJob(
     job: Job,
     // ): Promise<{ wlcName: string; apNum: number }> {
   ) {
-    const { wlcName, wlcHost } = job.data as {
+    const { wlcName, wlcHost, wlcVendor } = job.data as {
       wlcName: string;
       wlcHost: string;
+      wlcVendor: string;
     };
     const childJobs = await job.getChildrenValues();
     const data = new Map<string, Record<string, unknown>>();
@@ -95,7 +114,7 @@ export class WlcPollingProcessor extends WorkerHost {
             );
             continue;
           }
-          if (radioData !== 2) {
+          if (this.checkRoff(wlcVendor, radioData as number)) {
             // set status to roff
             statusValue = StatusState.Roff;
             continue;
@@ -122,8 +141,8 @@ export class WlcPollingProcessor extends WorkerHost {
           };
         }
         // sum rx and tx
-        let sumRx = 0;
-        let sumTx = 0;
+        let sumRx: bigint = 0n;
+        let sumTx: bigint = 0n;
         if (Object.keys(rxValue).length !== Object.keys(txValue).length) {
           console.warn(
             `Missing keys in rx and tx data for ${mac}. with lengths: rx=${Object.keys(rxValue).length}, tx=${Object.keys(txValue).length}`,
@@ -137,11 +156,27 @@ export class WlcPollingProcessor extends WorkerHost {
             );
             continue;
           }
-          sumRx += rxValue[index] as number;
-          sumTx += txValue[index] as number;
+          // check if rxValue[index] and txValue[index] are numbers
+          if (rx.type === 70)
+            sumRx += BigInt(
+              Buffer.from(rxValue[index] as string, 'hex').readUIntBE(
+                0,
+                Buffer.from(rxValue[index] as string, 'hex').length,
+              ),
+            );
+          else sumRx += BigInt(rxValue[index] as number);
+          if (tx.type === 70)
+            sumTx += BigInt(
+              Buffer.from(txValue[index] as string, 'hex').readUIntBE(
+                0,
+                Buffer.from(txValue[index] as string, 'hex').length,
+              ),
+            );
+          else sumTx += BigInt(txValue[index] as number);
         }
         // get id before save
         const ids = await this.configurationsService.snap({
+          vendor: wlcVendor,
           mac,
           ...rest,
           ...clientBand,
@@ -151,10 +186,11 @@ export class WlcPollingProcessor extends WorkerHost {
           wlc: wlcName,
           host: wlcHost,
           ip: ip.value,
-          status:
-            status.value === 1
-              ? statusValue
-              : this.statusSet[status.value as number],
+          status: this.checkStatus(
+            wlcVendor,
+            status.value as number,
+            statusValue,
+          ),
         });
         if (ids) {
           data.set(mac, {
@@ -162,8 +198,8 @@ export class WlcPollingProcessor extends WorkerHost {
             ...rest,
             ...clientBand,
             ...channelList,
-            rx: { value: sumRx, type: rx.type },
-            tx: { value: sumTx, type: tx.type },
+            rx: { value: sumRx.toString(), type: rx.type },
+            tx: { value: sumTx.toString(), type: tx.type },
           });
         } else {
           // remove key 'mac' from data
@@ -206,7 +242,8 @@ export class WlcPollingProcessor extends WorkerHost {
     // return { wlcName, apNum: data.size };
   }
 
-  private async ssidJob(job: Job) {
+  private async ssidCiscoJob(job: Job) {
+    // console.dir(await job.getChildrenValues(), { depth: null });
     const { wlcName } = job.data as {
       wlcName: string;
     };
@@ -226,12 +263,12 @@ export class WlcPollingProcessor extends WorkerHost {
     }
     try {
       const ssid = data.get('ssid');
-      const ssidAP = data.get('ssidAP');
-      if (!ssid || !ssidAP) {
+      const ssidNum = data.get('ssidNum');
+      if (!ssid || !ssidNum) {
         console.warn(`SSID or SSID AP data not found for WLC ${wlcName}`);
         return null;
       }
-      if (Object.keys(ssid).length !== Object.keys(ssidAP).length) {
+      if (Object.keys(ssid).length !== Object.keys(ssidNum).length) {
         console.warn(
           `Mismatch in SSID and SSID AP data for WLC ${wlcName}. Skipping.`,
         );
@@ -240,8 +277,8 @@ export class WlcPollingProcessor extends WorkerHost {
       const name: Record<string, Metrics> = {};
       for (const index of Object.keys(ssid)) {
         const ssidData = ssid[index] as Metrics;
-        const ssidAPData = ssidAP[index] as Metrics;
-        if (!ssidData || !ssidAPData) {
+        const ssidNumData = ssidNum[index] as Metrics;
+        if (!ssidData || !ssidNumData) {
           console.warn(
             `Missing SSID or SSID AP data for WLC ${wlcName} at index ${index}. Skipping.`,
           );
@@ -251,17 +288,72 @@ export class WlcPollingProcessor extends WorkerHost {
           'utf-8',
         );
         name[tmp] = {
-          value: ssidAPData.value,
-          type: ssidAPData.type,
+          value: ssidNumData.value,
+          type: ssidNumData.type,
         };
       }
       // select only name with key 'KUWIN', 'KUWIN-IOT', 'eduroam'
       const filteredName = new Map<string, Record<string, Metrics>>();
-      filteredName.set(wlcName, {
-        KUWIN: name['KUWIN'],
-        'KUWIN-IOT': name['KUWIN-IOT'],
-        eduroam: name['eduroam'],
-      });
+      filteredName.set(
+        wlcName,
+        Object.fromEntries(ssidWatchList.map((ssid) => [ssid, name[ssid]])),
+      );
+      await this.writeBufferQueue.add(
+        'writes-buffer-job',
+        {
+          measurement: 'ap_ssid',
+          wlcName,
+          data: Object.fromEntries(filteredName),
+        },
+        {
+          removeOnComplete: { age: 180, count: 100 },
+          removeOnFail: { age: 180, count: 100 },
+        },
+      );
+    } catch (error) {
+      console.error(`Error processing SSID for WLC ${wlcName}:`, error);
+      return null;
+    }
+  }
+
+  private async ssidHuaweiJob(job: Job) {
+    // console.dir(await job.getChildrenValues(), { depth: null });
+    const { wlcName } = job.data as {
+      wlcName: string;
+    };
+    const childJobs = await job.getChildrenValues();
+    const data = new Map<string, Record<string, unknown>>();
+    for (const v of Object.values(childJobs)) {
+      if (!v) continue;
+      const value = v as Record<string, Record<string, unknown>>;
+      for (const [key, metrics] of Object.entries(value)) {
+        const name = Object.keys(metrics)[0];
+        const value = Object.values(metrics)[0];
+        const existing = data.get(key) ?? {};
+        existing[name] = value;
+        data.set(key, existing);
+      }
+    }
+    try {
+      const ssidSum = Object.fromEntries(
+        ssidWatchList.map((ssid) => {
+          // sum value from all key in data[ssid]
+          const d = data.get(ssid) ?? {};
+          const sum = Object.values(d as Record<string, Metrics>).reduce(
+            (acc, curr) => ({
+              value: Number(acc.value) + Number(curr.value),
+              type: curr.type,
+            }),
+            { value: 0, type: 0 },
+          );
+          return [ssid, sum];
+        }),
+      );
+      const filteredName = new Map<string, Record<string, Metrics>>();
+      filteredName.set(
+        wlcName,
+        Object.fromEntries(ssidWatchList.map((ssid) => [ssid, ssidSum[ssid]])),
+      );
       await this.writeBufferQueue.add(
         'writes-buffer-job',
         {
@@ -284,8 +376,10 @@ export class WlcPollingProcessor extends WorkerHost {
     switch (job.name) {
       case 'metric-polling-job':
         return this.metricsJob(job);
-      case 'ssid-polling-job':
-        return this.ssidJob(job);
+      case 'ssid-cisco-polling-job':
+        return this.ssidCiscoJob(job);
+      case 'ssid-huawei-polling-job':
+        return this.ssidHuaweiJob(job);
       default:
         throw new Error(`Unknown job name: ${job.name}`);
     }

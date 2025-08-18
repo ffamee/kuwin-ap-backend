@@ -8,6 +8,7 @@ import { OidPollingProcessor } from './oid.processor';
 import { Queue, Worker } from 'bullmq';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { wlcs } from 'src/shared/defined/constants';
 
 @Module({
   providers: [OidPollingProcessor],
@@ -24,18 +25,12 @@ export class OidModule implements OnModuleInit, OnApplicationShutdown {
   ) {}
 
   onModuleInit() {
-    const wlcs = [
-      { name: 'wlc-1', host: '172.16.26.10' },
-      { name: 'wlc-2', host: '172.16.26.12' },
-      { name: 'wlc-3', host: '172.16.26.16' },
-      { name: 'wlc-4', host: '172.16.26.11' },
-    ];
-    if (wlcs.length === 0) {
-      console.warn(
-        '[OidsModule] No WLCs found, no OID polling workers will be created.',
-      );
-      return;
-    }
+    // if (wlcs.length !== 4) {
+    //   console.warn(
+    //     '[OidsModule] No WLCs found, no OID polling workers will be created.',
+    //   );
+    //   return;
+    // }
     for (const wlc of wlcs) {
       const queueName = `oid-polling-queue-${wlc.name}`;
       const processor = this.moduleRef.get(OidPollingProcessor);

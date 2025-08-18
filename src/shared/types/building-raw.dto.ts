@@ -10,8 +10,8 @@ interface RawBuilding {
   client_24: number | null;
   client_5: number | null;
   client_6: number | null;
-  rx: number | null;
-  tx: number | null;
+  rx: bigint | null;
+  tx: bigint | null;
   accesspoint_id: number | null;
   accesspoint_name: string | null;
   ip_id: number | null;
@@ -29,8 +29,8 @@ interface OutputBuilding {
     client24: number | null;
     client5: number | null;
     client6: number | null;
-    rx: number | null;
-    tx: number | null;
+    rx: bigint | null;
+    tx: bigint | null;
     accesspoint: {
       id: number;
       name: string;
