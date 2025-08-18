@@ -366,7 +366,7 @@ export class EntitiesService {
             !confirm
           ) {
             throw new ConflictException(
-              `This action will change entity of section ID ${id} to section with ID ${updateEntityDto.sectionId}. Please confirm to proceed.`,
+              `This action will change entity of section ID ${entity.section.id} to section with ID ${updateEntityDto.sectionId}. Please confirm to proceed.`,
             );
           }
           let filename = entity.pic;

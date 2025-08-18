@@ -36,7 +36,7 @@ async function saveFile(
   }
 }
 
-async function deleteFile(filename: string) {
+async function deleteFile(filename: string | null) {
   if (!filename || filename === 'default.png') {
     return; // No file to delete or default file, skip deletion
   }

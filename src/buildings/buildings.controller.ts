@@ -18,6 +18,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -61,22 +62,25 @@ export class BuildingsController {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'number', example: 1 },
-        name: { type: 'string', example: 'Main Building' },
-        apAll: { type: 'number', example: 10 },
-        apMaintain: { type: 'number', example: 2 },
-        apDown: { type: 'number', example: 8 },
-        totalUser: { type: 'number', example: 100 },
-        accesspoints: {
+        id: { type: 'number', description: 'Building ID' },
+        name: { type: 'string', description: 'Building name' },
+        configurations: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              id: { type: 'number', example: 1 },
-              name: { type: 'string', example: 'Access Point 1' },
-              status: { type: 'string', example: 'active' },
+              id: { type: 'number', description: 'Configuration ID' },
+              name: { type: 'string', description: 'Configuration name' },
+              count: {
+                type: 'number',
+                description: 'Number of access points in this configuration',
+              },
             },
           },
+        },
+        count: {
+          type: 'number',
+          description: 'Total number of access points in the building',
         },
       },
     },
@@ -152,6 +156,20 @@ export class BuildingsController {
   }
 
   @ApiOperation({ summary: 'Delete a building by ID' })
+  @ApiParam({
+    name: 'id',
+    description: 'Building ID',
+    type: Number,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'confirm',
+    required: false,
+    description: 'Confirmation flag to delete the building (default: false)',
+    schema: {
+      type: 'string',
+    },
+  })
   @ApiNotFoundResponse({
     description: 'Building with the given ID not found',
   })
@@ -162,22 +180,8 @@ export class BuildingsController {
     description: 'Building cannot be deleted because it has access points',
   })
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.buildingsService.remove(+id);
-  }
-
-  @ApiOperation({
-    summary: 'Move a building to the default entity and delete it',
-  })
-  @ApiNotFoundResponse({
-    description: 'Building with the given ID not found',
-  })
-  @ApiOkResponse({
-    description: 'Building moved to default entity and deleted successfully',
-  })
-  @Delete('move/:id')
-  moveAndDelete(@Param('id') id: string) {
-    return this.buildingsService.moveAndDelete(+id);
+  remove(@Param('id') id: string, @Query('confirm') confirm: string) {
+    return this.buildingsService.remove(+id, confirm === 'true');
   }
 
   @ApiOperation({ summary: 'Edit a building by ID' })

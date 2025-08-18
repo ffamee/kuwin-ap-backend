@@ -14,7 +14,6 @@ import { CreateBuildingDto } from './dto/create-building.dto';
 import { UpdateBuildingDto } from './dto/update-building.dto';
 import { ConfigService } from '@nestjs/config';
 import { deleteFile, saveFile } from 'src/shared/utils/file-system';
-import { Entity } from 'src/entities/entities/entity.entity';
 import { InfluxService } from 'src/influx/influx.service';
 import { Location } from 'src/locations/entities/location.entity';
 import {
@@ -163,21 +162,10 @@ export class BuildingsService {
     };
   }
 
-  async getBuildingById(id: number): Promise<Building> {
-    const building = await this.buildingRepository.findOne({
-      where: { id },
-      relations: ['entity', 'locations'],
-    });
-    if (!building) {
-      throw new NotFoundException(`Building with ID ${id} not found`);
-    }
-    return building;
-  }
-
   async create(
     createBuildingDto: CreateBuildingDto,
     file: Express.Multer.File | undefined,
-  ): Promise<Building> {
+  ): Promise<{ id: number; name: string }> {
     if (!(await this.entityService.exist(createBuildingDto.entityId))) {
       throw new NotFoundException(
         `Entity with ID ${createBuildingDto.entityId} not found`,
@@ -204,46 +192,36 @@ export class BuildingsService {
       pic: filename,
       entity: { id: createBuildingDto.entityId },
     });
-    return this.buildingRepository.save(building);
+    const res = await this.buildingRepository.save(building);
+    return { id: res.id, name: res.name };
   }
 
-  async remove(id: number) {
-    const building = await this.buildingRepository.findOne({
-      where: { id },
-      relations: ['locations'],
-    });
-    if (!building) {
-      throw new NotFoundException(`Building with ID ${id} not found`);
-    }
-    if (building.locations.length > 0) {
-      throw new ConflictException(
-        `Cannot delete building with ID ${id} because it has associated locations.`,
-      );
-    }
-    await deleteFile(building.pic ?? 'default.png');
-    return this.buildingRepository.delete(id).then(() => {
-      return { message: `Building with ID ${id} deleted successfully` };
-    });
-  }
-
-  async moveAndDelete(id: number) {
+  async remove(id: number, confirm: boolean) {
     try {
-      await this.dataSource.transaction(async (manager) => {
+      return this.dataSource.transaction(async (manager) => {
         const building = await manager.findOne(Building, {
           where: { id },
+          relations: ['locations'],
           lock: { mode: 'pessimistic_write' },
         });
         if (building) {
-          await deleteFile(building.pic ?? 'default.png');
-          await manager.update(
-            Location,
-            { building: { id } },
-            { building: { id: 290 } },
-          );
-          await manager.delete(Building, { id });
-          return {
-            message: `Building with ID ${id} moved and deleted successfully`,
-          };
+          if (building.locations.length > 0) {
+            if (confirm) {
+              await manager.update(
+                Location,
+                { building: { id } },
+                { building: { id: 290 } }, // Move locations to default building with ID 290
+              );
+            } else {
+              throw new ConflictException(
+                `Cannot delete building with ID ${id} because it has associated locations.`,
+              );
+            }
+          }
+          await deleteFile(building.pic);
+          return await manager.delete(Building, { id }).then(() => {
+            return { message: `Building with ID ${id} deleted successfully` };
+          });
         } else {
           throw new NotFoundException(`Building with ID ${id} not found`);
         }
@@ -264,92 +242,79 @@ export class BuildingsService {
     confirm: boolean,
     file: Express.Multer.File | undefined,
   ) {
-    const building = await this.buildingRepository.findOne({
-      where: { id },
-      relations: ['entity'],
-    });
-    if (!building) {
+    if (!(await this.buildingRepository.exists({ where: { id } }))) {
       throw new NotFoundException(`Building with ID ${id} not found`);
     }
     if (
-      updateBuildingDto.name &&
-      (await this.buildingRepository.exists({
-        where: { name: updateBuildingDto.name, id: Not(id) },
-      }))
+      updateBuildingDto.entityId &&
+      !(await this.entityService.exist(updateBuildingDto.entityId))
     ) {
-      throw new ConflictException(
-        `Building with name ${updateBuildingDto.name} already exists`,
+      throw new NotFoundException(
+        `Entity with ID ${updateBuildingDto.entityId} not found`,
       );
     }
-    if (
-      updateBuildingDto.entityId &&
-      updateBuildingDto.entityId !== building.entity.id
-    ) {
-      if (!confirm) {
-        throw new ConflictException(
-          `Building with ID ${id} cannot be moved to another entity without confirmation`,
-        );
-      } else {
-        try {
-          await this.dataSource.transaction(async (manager) => {
-            const building = await manager.findOne(Building, {
-              where: { id },
-              lock: { mode: 'pessimistic_write' },
-            });
-            if (building) {
-              if (
-                !(await manager.exists(Entity, {
-                  where: { id: updateBuildingDto.entityId },
-                }))
-              ) {
-                throw new NotFoundException(
-                  `Entity with ID ${updateBuildingDto.entityId} not found`,
-                );
-              }
-              const { entityId, ...rest } = updateBuildingDto;
-              let filename = building.pic;
-              if (file) {
-                await deleteFile(building.pic ?? 'default.png');
-                filename = await saveFile(
-                  this.configService,
-                  file,
-                  'buildings',
-                );
-              }
-              await manager.update(Building, id, {
-                ...rest,
-                pic: filename,
-                entity: { id: entityId },
-              });
-              return {
-                message: `Building with ID ${id} moved to entity ${updateBuildingDto.entityId} successfully`,
-              };
-            }
-          });
-        } catch (error) {
-          if (error instanceof NotFoundException) {
-            throw error;
-          }
-          throw new InternalServerErrorException(
-            `Failed to update building with ID ${id} with ${error}`,
-          );
-        }
-      }
-    } else {
-      let filename = building.pic;
-      if (updateBuildingDto.entityId) delete updateBuildingDto.entityId;
-      if (file) {
-        await deleteFile(building.pic ?? 'default.png');
-        filename = await saveFile(this.configService, file, 'buildings');
-      }
-      return this.buildingRepository
-        .update(id, {
-          ...updateBuildingDto,
-          pic: filename,
-        })
-        .then(() => {
-          return { message: `Building with ID ${id} updated successfully.` };
+
+    // start transaction
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const building = await manager.findOne(Building, {
+          where: { id },
+          relations: ['entity', 'locations'],
+          lock: { mode: 'pessimistic_write' },
         });
+        if (building) {
+          if (
+            updateBuildingDto.entityId &&
+            updateBuildingDto.entityId !== building.entity.id &&
+            building.locations.length > 0 &&
+            !confirm
+          ) {
+            throw new ConflictException(
+              `This action will change building of entity ID ${building.entity.id} to entity with ID ${updateBuildingDto.entityId}. Please confirm to proceed.`,
+            );
+          }
+          if (
+            updateBuildingDto.name &&
+            (await manager.exists(Building, {
+              where: {
+                name: updateBuildingDto.name,
+                id: Not(id),
+                entity: {
+                  id: updateBuildingDto.entityId ?? building.entity.id,
+                },
+              },
+            }))
+          ) {
+            throw new ConflictException(
+              `Building with name ${updateBuildingDto.name} already exists in the specified entity`,
+            );
+          }
+          let filename = building.pic;
+          if (file) {
+            await deleteFile(building.pic ?? 'default.png');
+            filename = await saveFile(this.configService, file, 'buildings');
+          }
+          const { entityId, ...rest } = updateBuildingDto;
+          return manager.save(Building, {
+            id: id,
+            ...(file && { pic: filename }),
+            ...(entityId && { entity: { id: entityId } }),
+            ...rest,
+          });
+        } else {
+          throw new NotFoundException(`Building with ID ${id} not found`);
+        }
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Failed to update building with ID ${id} with ${error}`,
+      );
     }
   }
 }
