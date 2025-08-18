@@ -146,12 +146,23 @@ export class ConfigurationsService {
 
   async getAll() {
     return this.configurationsRepository.find({
-      relations: ['ip', 'location', 'accesspoint'],
+      relations: [
+        'ip',
+        'location',
+        'accesspoint',
+        'location.building',
+        'location.building.entity',
+        'location.building.entity.section',
+      ],
       select: {
         ip: { id: true, ip: true },
         location: {
           id: true,
           name: true,
+          building: {
+            id: true,
+            entity: { id: true, section: { id: true } },
+          },
         },
         accesspoint: { id: true, name: true },
       },
@@ -164,6 +175,9 @@ export class ConfigurationsService {
       .leftJoin('configuration.accesspoint', 'accesspoint')
       .leftJoin('configuration.location', 'location')
       .leftJoin('configuration.ip', 'ip')
+      .leftJoin('location.building', 'building')
+      .leftJoin('building.entity', 'entity')
+      .leftJoin('entity.section', 'section')
       .where(
         'configuration.status IN (:down , :download, :maintenance, :pending)',
         {
@@ -174,6 +188,18 @@ export class ConfigurationsService {
         },
       )
       .orWhere('configuration.lastSeenAt < NOW() - INTERVAL 5 MINUTE')
+      .select([
+        'configuration',
+        'accesspoint.id',
+        'accesspoint.name',
+        'ip.id',
+        'ip.ip',
+        'location.id',
+        'location.name',
+        'building.id',
+        'entity.id',
+        'section.id',
+      ])
       .getMany();
   }
 
