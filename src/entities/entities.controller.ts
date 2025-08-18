@@ -18,6 +18,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -33,7 +34,8 @@ export class EntitiesController {
   constructor(private readonly entitiesService: EntitiesService) {}
 
   @ApiOperation({
-    summary: 'Get all buildings in entities with their names',
+    summary:
+      'Get all buildings in entities with their names (unused in frontend /report)',
   })
   @ApiOkResponse({
     description: 'return object with key as entity id',
@@ -90,10 +92,6 @@ export class EntitiesController {
       properties: {
         id: { type: 'number', example: 1 },
         name: { type: 'string', example: 'Entity Name' },
-        apAll: { type: 'number', example: 10 },
-        apMaintain: { type: 'number', example: 5 },
-        apDown: { type: 'number', example: 2 },
-        totalUser: { type: 'number', example: 100 },
         buildings: {
           type: 'array',
           items: {
@@ -101,34 +99,22 @@ export class EntitiesController {
             properties: {
               id: { type: 'number', example: 1 },
               name: { type: 'string', example: 'Building Name' },
-              apAll: { type: 'number', example: 10 },
-              apMaintain: { type: 'number', example: 5 },
-              apDown: { type: 'number', example: 2 },
-              user1: { type: 'number', example: 50 },
-              user2: { type: 'number', example: 50 },
+              count: {
+                type: 'number',
+                example: 10,
+                description:
+                  'Count of metrics in buildings e.g. configCount, downCount clientCount',
+              }, // Number of buildings
             },
           },
         },
-        accesspoints: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'number', example: 1 },
-                  status: { type: 'string', example: 'active' },
-                  ip: { type: 'string', example: '1.1.1.1' },
-                  name: { type: 'string', example: 'Accesspoint Name' },
-                  location: { type: 'string', example: 'Location Name' },
-                  numberClient: { type: 'number', example: 50 },
-                  numberClient_2: { type: 'number', example: 50 },
-                },
-              },
-            },
-          },
-        },
+        sectionId: { type: 'number', example: 1 }, // Section ID
+        count: {
+          type: 'number',
+          description:
+            'Count of metrics in entity e.g. configCount, downCount clientCount',
+          example: 5,
+        }, // Count of metrics in entity
       },
     },
   })
@@ -233,6 +219,13 @@ export class EntitiesController {
   })
   @ApiOkResponse({
     description: 'Entity created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        name: { type: 'string', example: 'New Entity' },
+      },
+    },
   })
   @ApiNotFoundResponse({
     description: 'Section with the given ID not found',
@@ -242,7 +235,7 @@ export class EntitiesController {
   })
   @ApiResponse({
     status: 413,
-    description: 'File too large, maximum size is 10MB',
+    description: 'File too large, maximum size is 10MB (error from multer)',
   })
   @ApiBadRequestResponse({
     description: 'File type not matched with jpeg, png, or gif',
@@ -291,6 +284,21 @@ export class EntitiesController {
   @ApiOperation({
     summary: 'Delete an entity by ID',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'ID of the entity to delete',
+    type: Number,
+    required: true,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'confirm',
+    required: false,
+    description: 'Confirm deletion of the entity',
+    schema: {
+      type: 'string',
+    },
+  })
   @ApiOkResponse({
     description: 'Entity deleted successfully',
     schema: {
@@ -311,33 +319,8 @@ export class EntitiesController {
       'Entity with the given ID has associated buildings and cannot be deleted',
   })
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.entitiesService.remove(+id);
-  }
-
-  @ApiOperation({
-    summary: 'Move entity to default entity and delete it',
-  })
-  @ApiOkResponse({
-    description:
-      'Entity moved buildings to default entity and deleted successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: {
-          type: 'string',
-          example:
-            'Entity with ID 1 moved buildings to default entity and deleted successfully',
-        },
-      },
-    },
-  })
-  @ApiNotFoundResponse({
-    description: 'Entity with the given ID not found',
-  })
-  @Delete('move/:id')
-  moveAndDelete(@Param('id') id: string) {
-    return this.entitiesService.moveAndDelete(+id);
+  remove(@Param('id') id: string, @Query('confirm') confirm: string) {
+    return this.entitiesService.remove(+id, confirm === 'true');
   }
 
   @ApiOperation({
@@ -346,9 +329,31 @@ export class EntitiesController {
   @ApiBody({
     description: 'Update entity details',
     type: UpdateEntityDto,
+    examples: {
+      updateEntity: {
+        value: {
+          name: 'Updated Entity',
+          sectionId: 1, // 1 for faculty, 2 for organization, 3 for dormitory
+        },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'confirm',
+    required: false,
+    schema: {
+      type: 'string',
+    },
   })
   @ApiOkResponse({
     description: 'Entity updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        name: { type: 'string', example: 'Updated Entity' },
+      },
+    },
   })
   @ApiNotFoundResponse({
     description: 'Entity with the given ID not found',

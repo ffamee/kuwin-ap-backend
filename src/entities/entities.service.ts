@@ -13,7 +13,6 @@ import { SectionService } from '../section/section.service';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { Building } from '../buildings/entities/building.entity';
 import { UpdateEntityDto } from './dto/update-entity.dto';
-import { Section } from '../section/entities/section.entity';
 import { ConfigService } from '@nestjs/config';
 import { deleteFile, saveFile } from 'src/shared/utils/file-system';
 import { InfluxService } from 'src/influx/influx.service';
@@ -38,9 +37,6 @@ export class EntitiesService {
     @Inject(forwardRef(() => SectionService))
     private readonly sectionService: SectionService,
   ) {}
-  // create(createEntityDto: CreateEntityDto) {
-  //   return 'This action adds a new entity';
-  // }
 
   exist(id: number): Promise<boolean> {
     return this.entityRepository.exists({ where: { id } });
@@ -248,7 +244,7 @@ export class EntitiesService {
   async create(
     createEntityDto: CreateEntityDto,
     file: Express.Multer.File | undefined,
-  ): Promise<Entity> {
+  ): Promise<{ id: number; name: string }> {
     if (!(await this.sectionService.exist(createEntityDto.sectionId))) {
       throw new NotFoundException(
         `Section with ID ${createEntityDto.sectionId} not found`,
@@ -277,46 +273,38 @@ export class EntitiesService {
       section: { id: createEntityDto.sectionId },
     });
 
-    return this.entityRepository.save(entity);
+    const res = await this.entityRepository.save(entity);
+    return { id: res.id, name: res.name };
   }
 
-  async remove(id: number) {
-    const entity = await this.entityRepository.findOne({
-      where: { id },
-      relations: ['buildings'],
-    });
-    if (!entity) {
-      throw new NotFoundException(`Entity with ID ${id} not found`);
-    }
-    if (entity.buildings.length > 0) {
-      throw new ConflictException(
-        `Entity with ID ${id} has associated buildings and cannot be deleted`,
-      );
-    }
-    await deleteFile(entity.pic);
-    return await this.entityRepository.delete(id).then(() => {
-      return { message: `Entity with ID ${id} deleted successfully` };
-    });
-  }
-
-  async moveAndDelete(id: number) {
+  async remove(id: number, confirm: boolean) {
     try {
-      await this.dataSource.transaction(async (manager) => {
+      return await this.dataSource.transaction(async (manager) => {
         const entity = await manager.findOne(Entity, {
           where: { id },
+          relations: ['buildings'],
           lock: { mode: 'pessimistic_write' },
         });
         if (entity) {
+          if (entity.buildings.length > 0) {
+            if (confirm) {
+              await manager.update(
+                Building,
+                { entity: { id } },
+                { entity: { id: 123 } }, // Move buildings to default entity
+              );
+            } else {
+              throw new ConflictException(
+                `Entity with id ${id} cannot be deleted because it has associated buildings, please confirm to proceed`,
+              );
+            }
+          }
           await deleteFile(entity.pic);
-          await manager.update(
-            Building,
-            { entity: { id } },
-            { entity: { id: 123 } },
-          );
-          await manager.delete(Entity, { id });
-          return {
-            message: `Entity with ID ${id} moved buildings to default entity and deleted successfully`,
-          };
+          return await manager.delete(Entity, { id }).then(() => {
+            return {
+              message: `Entity with ID ${id} moved buildings to default entity and deleted successfully`,
+            };
+          });
         } else {
           throw new NotFoundException(`Entity with id ${id} not found`);
         }
@@ -324,6 +312,9 @@ export class EntitiesService {
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error; // rethrow NotFoundException
+      }
+      if (error instanceof ConflictException) {
+        throw error; // rethrow ConflictException
       }
       throw new InternalServerErrorException(
         `Entity with id ${id} cannot be deleted because ${error}`,
@@ -337,11 +328,7 @@ export class EntitiesService {
     confirm: boolean,
     file: Express.Multer.File | undefined,
   ) {
-    const entity = await this.entityRepository.findOne({
-      where: { id },
-      relations: ['section'],
-    });
-    if (!entity) {
+    if (!(await this.entityRepository.exists({ where: { id } }))) {
       throw new NotFoundException(`Entity with ID ${id} not found`);
     }
     if (
@@ -356,70 +343,58 @@ export class EntitiesService {
     }
     if (
       updateEntityDto.sectionId &&
-      updateEntityDto.sectionId !== entity.section.id
+      !(await this.sectionService.exist(updateEntityDto.sectionId))
     ) {
-      // warning: this action will move entity to another section, please confirm
-      if (!confirm) {
-        throw new ConflictException(
-          `This action will change entity of section ID ${id} to section with ID ${updateEntityDto.sectionId}. Please confirm to proceed.`,
-        );
-      } else {
-        // use transaction to ensure atomicity
-        try {
-          await this.dataSource.transaction(async (manager) => {
-            const entity = await manager.findOne(Entity, {
-              where: { id },
-              lock: { mode: 'pessimistic_write' },
-            });
-            if (entity) {
-              if (
-                !(await manager.exists(Section, {
-                  where: { id: updateEntityDto.sectionId },
-                }))
-              ) {
-                throw new NotFoundException(
-                  `Section with ID ${updateEntityDto.sectionId} not found`,
-                );
-              }
-              const { sectionId, ...rest } = updateEntityDto;
-              let filename = entity.pic;
-              if (file) {
-                await deleteFile(entity.pic);
-                filename = await saveFile(this.configService, file, 'entities');
-              }
-              await manager.update(Entity, id, {
-                ...rest,
-                pic: filename,
-                section: { id: sectionId },
-              });
-              return {
-                message: `Entity with ID ${id} updated successfully.`,
-              };
-            } else {
-              throw new NotFoundException(`Entity with ID ${id} not found`);
-            }
-          });
-        } catch (error) {
-          if (error instanceof NotFoundException) {
-            throw error; // rethrow NotFoundException
-          }
-          throw new InternalServerErrorException(
-            `Failed to update entity ID ${id} with error: ${error}`,
-          );
-        }
-      }
-    } else {
-      let filename = entity.pic;
-      if (updateEntityDto.sectionId) delete updateEntityDto.sectionId;
-      if (file) {
-        await deleteFile(entity.pic);
-        filename = await saveFile(this.configService, file, 'entities');
-      }
-      return this.entityRepository
-        .update(id, { ...updateEntityDto, pic: filename })
-        .then(() => {
-          return { message: `Entity with ID ${id} updated successfully` };
+      throw new NotFoundException(
+        `Section with ID ${updateEntityDto.sectionId} not found`,
+      );
+    }
+
+    // start transaction
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const entity = await manager.findOne(Entity, {
+          where: { id },
+          relations: ['section', 'buildings'],
+          lock: { mode: 'pessimistic_write' },
         });
+        if (entity) {
+          if (
+            updateEntityDto.sectionId &&
+            updateEntityDto.sectionId !== entity.section.id &&
+            entity.buildings.length > 0 &&
+            !confirm
+          ) {
+            throw new ConflictException(
+              `This action will change entity of section ID ${id} to section with ID ${updateEntityDto.sectionId}. Please confirm to proceed.`,
+            );
+          }
+          let filename = entity.pic;
+          if (file) {
+            await deleteFile(entity.pic);
+            filename = await saveFile(this.configService, file, 'entities');
+          }
+          const { sectionId, ...rest } = updateEntityDto;
+          return manager.save(Entity, {
+            id: id,
+            ...(file && { pic: filename }),
+            ...(sectionId && { section: { id: sectionId } }),
+            ...rest,
+          });
+        } else {
+          throw new NotFoundException(`Entity with ID ${id} not found`);
+        }
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error; // rethrow NotFoundException
+      }
+      if (error instanceof ConflictException) {
+        throw error; // rethrow ConflictException
+      }
+      throw new InternalServerErrorException(
+        `Failed to update entity ID ${id} with error: ${error}`,
+      );
     }
   }
 }

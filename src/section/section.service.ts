@@ -69,10 +69,11 @@ export class SectionService {
               );
             }
           }
-          await manager.delete(Section, { id });
-          return {
-            message: `Section with id ${id} moved entities to default section and deleted successfully`,
-          };
+          return await manager.delete(Section, { id }).then(() => {
+            return {
+              message: `Section with id ${id} moved entities to default section and deleted successfully`,
+            };
+          });
         } else {
           throw new NotFoundException(`Section with id ${id} not found`);
         }
