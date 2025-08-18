@@ -15,6 +15,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
@@ -25,13 +26,17 @@ import { UpdateSectionDto } from './dto/update-section.dto';
 export class SectionController {
   constructor(private readonly sectionService: SectionService) {}
 
+  @ApiOperation({
+    summary: 'Get monitor data for sections (Top page)',
+  })
   @Get('monitor')
   getMonitor() {
     return this.sectionService.getMonitor();
   }
 
   @ApiOperation({
-    summary: 'Get all entities in sections with their names',
+    summary:
+      'Get all entities in sections with their names (ununsed frontend /report)',
   })
   @ApiOkResponse({
     description: 'return object with key as section id',
@@ -94,24 +99,30 @@ export class SectionController {
       properties: {
         id: { type: 'number', example: 1 },
         name: { type: 'string', example: 'Section 1' },
-        apAll: { type: 'number', example: 10 },
-        apMaintain: { type: 'number', example: 5 },
-        apDown: { type: 'number', example: 2 },
-        totalUser: { type: 'number', example: 100 },
         entities: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              id: { type: 'number', example: 1 },
-              name: { type: 'string', example: 'Entity 1' },
-              apAll: { type: 'number', example: 10 },
-              apMaintain: { type: 'number', example: 5 },
-              apDown: { type: 'number', example: 2 },
-              user1: { type: 'number', example: 20 },
-              user2: { type: 'number', example: 80 },
+              id: { type: 'number' },
+              name: { type: 'string' },
+              count: {
+                type: 'number',
+                description:
+                  'Count of metrics in entity e.g. configCount, downCount clientCount',
+              },
             },
           },
+          example: [
+            { id: 1, name: 'Entity 1', count: 5 },
+            { id: 2, name: 'Entity 2', count: 3 },
+          ],
+        },
+        count: {
+          type: 'number',
+          example: 2,
+          description:
+            'Count of metrics in section e.g. configCount, downCount clientCount',
         },
       },
     },
@@ -122,42 +133,23 @@ export class SectionController {
   }
 
   @ApiOperation({
-    summary: 'Get all sections without *others',
-  })
-  @ApiOkResponse({
-    description: 'return list of all sections',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'number' },
-          secType: { type: 'string' },
-        },
-      },
-      example: [
-        {
-          id: 1,
-          secType: 'Section 1',
-        },
-        {
-          id: 2,
-          secType: 'Section 2',
-        },
-      ],
-    },
-  })
-  @Get()
-  findAll() {
-    return this.sectionService.findAll();
-  }
-
-  @ApiOperation({
     summary: 'Create a new section by given section name',
   })
   @ApiBody({
     description: 'Section name',
+    required: true,
+    examples: {
+      'New Section': {
+        summary: 'Create Section',
+        value: {
+          name: 'new section',
+        },
+      },
+    },
     type: CreateSectionDto,
+  })
+  @ApiConflictResponse({
+    description: 'Section with name already exists',
   })
   @ApiOkResponse({
     description: 'return created section',
@@ -177,6 +169,23 @@ export class SectionController {
   @ApiOperation({
     summary: 'Delete a section by id',
   })
+  @ApiParam({
+    name: 'id',
+    required: true,
+    description: 'Section id',
+    schema: {
+      type: 'string',
+      example: '1',
+    },
+  })
+  @ApiQuery({
+    name: 'confirm',
+    required: false,
+    description: 'Confirm deletion of section',
+    schema: {
+      type: 'string',
+    },
+  })
   @ApiOkResponse({
     description: 'Section deleted successfully',
   })
@@ -184,26 +193,12 @@ export class SectionController {
     description: 'Section not found',
   })
   @ApiConflictResponse({
-    description: 'Section cannot be deleted because it has associated entities',
+    description:
+      'Section cannot be deleted because it has associated entities, please confirm deletion',
   })
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.sectionService.remove(+id);
-  }
-
-  @ApiOperation({
-    summary: 'Move entities to deleted section and delete section by id',
-  })
-  @ApiOkResponse({
-    description:
-      'Section moved entities to default section and deleted successfully',
-  })
-  @ApiNotFoundResponse({
-    description: 'Section not found',
-  })
-  @Delete('move/:id')
-  moveAndDelete(@Param('id') id: string) {
-    return this.sectionService.moveAndDelete(+id);
+  remove(@Param('id') id: string, @Query('confirm') confirm: string) {
+    return this.sectionService.remove(+id, confirm === 'true');
   }
 
   @ApiOperation({
@@ -227,7 +222,7 @@ export class SectionController {
       type: 'object',
       properties: {
         id: { type: 'number', example: 1 },
-        secType: { type: 'string', example: 'Updated Section' },
+        name: { type: 'string', example: 'Updated Section' },
       },
     },
   })

@@ -34,10 +34,6 @@ export class SectionService {
     private sectionRepository: Repository<Section>,
   ) {}
 
-  findAll(): Promise<Section[]> {
-    return this.sectionRepository.find({ where: { id: Not(4) } });
-  }
-
   async create(createSectionDto: CreateSectionDto): Promise<Section> {
     if (
       await this.sectionRepository.exists({
@@ -51,40 +47,28 @@ export class SectionService {
     return this.sectionRepository.save(createSectionDto);
   }
 
-  async remove(id: number) {
-    const section = await this.sectionRepository.findOne({
-      where: { id },
-      relations: ['entities'],
-    });
-    if (!section) {
-      throw new NotFoundException(`Section with id ${id} not found`);
-    }
-    if (section.entities.length > 0) {
-      throw new ConflictException(
-        `Section with id ${id} cannot be deleted because it has associated entities`,
-      );
-    }
-    return this.sectionRepository.delete(id).then(() => {
-      return {
-        message: `Section with id ${id} deleted successfully`,
-      };
-    });
-  }
-
-  async moveAndDelete(id: number) {
-    // use transaction to ensure atomicity to move entities to default section (id: 8) and delete section
+  async remove(id: number, confirm: boolean) {
     try {
-      await this.dataSource.transaction(async (manager) => {
+      return await this.dataSource.transaction(async (manager) => {
         const section = await manager.findOne(Section, {
           where: { id },
+          relations: ['entities'],
           lock: { mode: 'pessimistic_write' },
         });
         if (section) {
-          await manager.update(
-            Entity,
-            { section: { id } },
-            { section: { id: 8 } },
-          );
+          if (section.entities.length > 0) {
+            if (confirm) {
+              await manager.update(
+                Entity,
+                { section: { id } },
+                { section: { id: 8 } },
+              );
+            } else {
+              throw new ConflictException(
+                `Section with id ${id} cannot be deleted because it has associated entities`,
+              );
+            }
+          }
           await manager.delete(Section, { id });
           return {
             message: `Section with id ${id} moved entities to default section and deleted successfully`,
@@ -97,40 +81,13 @@ export class SectionService {
       if (error instanceof NotFoundException) {
         throw error; // rethrow NotFoundException
       }
+      if (error instanceof ConflictException) {
+        throw error; // rethrow ConflictException
+      }
       throw new InternalServerErrorException(
         `Section with id ${id} cannot be deleted because ${error}`,
       );
     }
-
-    // other ways to implement lock writing
-    // await manager
-    // 	.createQueryBuilder(Section, 'section')
-    // 	.setLock('pessimistic_write')
-    // 	.where('section.id = :id', { id })
-    // 	.getOne();
-
-    // Solution by Query Runner
-    // const queryRunner = this.dataSource.createQueryRunner();
-    // await queryRunner.connect();
-    // const exists = await queryRunner.manager.exists(Section, { where: { id } });
-    // if (!exists) {
-    //   throw new NotFoundException(`Section with id ${id} not found`);
-    // }
-    // await queryRunner.startTransaction();
-
-    // try {
-    //   await queryRunner.manager.update(
-    //     Entity,
-    //     { section: { id } },
-    //     { section: { id: 8 } },
-    //   );
-    //   await queryRunner.manager.delete(Section, { id });
-    // } catch (error) {
-    //   await queryRunner.rollbackTransaction();
-    //   throw error;
-    // } finally {
-    //   await queryRunner.release();
-    // }
   }
 
   async edit(id: number, UpdateSectionDto: UpdateSectionDto) {
@@ -146,7 +103,7 @@ export class SectionService {
         `Section with name ${UpdateSectionDto.name} already exists`,
       );
     }
-    return this.sectionRepository.update(id, UpdateSectionDto);
+    return this.sectionRepository.save({ ...UpdateSectionDto, id });
   }
 
   exist(sectionId: number): Promise<boolean> {

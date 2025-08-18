@@ -28,7 +28,7 @@ export class SnmpService {
     private readonly configurationsService: ConfigurationsService,
   ) {}
 
-  @Cron('*/5 * * * *')
+  // @Cron('*/5 * * * *')
   async getSnmp() {
     console.time('SNMP polling jobs processing time');
     const configAll = await this.configurationsService.count();
