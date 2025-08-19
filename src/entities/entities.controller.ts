@@ -240,7 +240,7 @@ export class EntitiesController {
   @ApiBadRequestResponse({
     description: 'File type not matched with jpeg, png, or gif',
   })
-  @Post()
+  @Post('create')
   @UseInterceptors(
     FileInterceptor('pic', {
       // storage: diskStorge({

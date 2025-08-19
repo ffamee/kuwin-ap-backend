@@ -161,7 +161,7 @@ export class SectionController {
       },
     },
   })
-  @Post()
+  @Post('create')
   create(@Body() createSectionDto: CreateSectionDto) {
     return this.sectionService.create(createSectionDto);
   }
