@@ -11,6 +11,7 @@ import {
   // UpdateDateColumn,
   OneToMany,
   OneToOne,
+  DeleteDateColumn,
 } from 'typeorm';
 
 @Entity('location')
@@ -42,6 +43,12 @@ export class Location {
     onUpdate: 'CURRENT_TIMESTAMP(6)',
   })
   updatedAt: Date;
+
+  @DeleteDateColumn({
+    name: 'deleted_at',
+    select: false,
+  })
+  deletedAt?: Date;
 
   @ManyToOne(() => Building, (building) => building.locations, {
     onDelete: 'RESTRICT',

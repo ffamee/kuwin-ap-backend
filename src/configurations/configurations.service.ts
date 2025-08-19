@@ -129,6 +129,10 @@ export class ConfigurationsService {
             location: config.location,
           });
         }
+        await this.locationsService.softDeleteLocation(
+          manager,
+          config.location.id,
+        );
         await manager.remove(Configuration, config);
         return {
           message: `Configuration with ID ${id} removed successfully`,
