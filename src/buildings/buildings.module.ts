@@ -8,12 +8,14 @@ import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { join } from 'path';
 import { InfluxModule } from '../influx/influx.module';
+import { LocationsModule } from '../locations/locations.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Building]),
     forwardRef(() => EntitiesModule),
     forwardRef(() => InfluxModule),
+    forwardRef(() => LocationsModule),
     MulterModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

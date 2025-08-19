@@ -98,6 +98,19 @@ export class BuildingsController {
     );
   }
 
+  @Get('inactive')
+  getInactiveLocations(
+    @Query('sec') sectionId: string,
+    @Query('entity') entityId: string,
+    @Query('build') buildingId: string,
+  ) {
+    return this.buildingsService.getInactiveLocations(
+      +sectionId,
+      +entityId,
+      +buildingId,
+    );
+  }
+
   @ApiOperation({ summary: 'Create a new building' })
   @ApiBody({
     description: 'Building data',

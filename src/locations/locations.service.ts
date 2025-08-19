@@ -6,13 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Location } from './entities/location.entity';
-import {
-  EntityManager,
-  IsNull,
-  MoreThanOrEqual,
-  Not,
-  Repository,
-} from 'typeorm';
+import { EntityManager, IsNull, Not, Repository } from 'typeorm';
 
 @Injectable()
 export class LocationsService {
@@ -52,9 +46,10 @@ export class LocationsService {
     }
   }
 
-  private async restoreLocation(id: number) {
-    const loc = await this.locationsRepository.findOne({
+  private async restoreLocation(manager: EntityManager, id: number) {
+    const loc = await manager.findOne(Location, {
       where: { id },
+      select: ['id', 'deletedAt'],
       withDeleted: true,
     });
     if (!loc) {
@@ -63,8 +58,8 @@ export class LocationsService {
     if (!loc.deletedAt) {
       throw new ConflictException('Location is not soft-deleted');
     }
-    return this.locationsRepository
-      .restore(id)
+    return manager
+      .restore(Location, id)
       .then(() => ({
         message: 'Location restored successfully',
       }))
@@ -88,7 +83,7 @@ export class LocationsService {
     });
     if (existingLocation) {
       if (existingLocation.deletedAt) {
-        await this.restoreLocation(existingLocation.id);
+        await this.restoreLocation(manager, existingLocation.id);
       }
       return existingLocation.id;
     } else {
@@ -141,28 +136,27 @@ export class LocationsService {
       });
   }
 
-  async testfindWithDeleted() {
-    return this.locationsRepository.find({
-      withDeleted: false,
-      relations: ['building'],
-      where: { id: MoreThanOrEqual(2763) },
-    });
-  }
-  async testfindDeleted() {
+  async getDeletedLocations(buildingId: number): Promise<Location[]> {
     return this.locationsRepository.find({
       withDeleted: true,
-      relations: ['building'],
       select: {
         id: true,
         name: true,
         deletedAt: true,
-        building: {
-          id: true,
-          name: true,
-        },
       },
-      where: { deletedAt: Not(IsNull()) },
+      where: { deletedAt: Not(IsNull()), building: { id: buildingId } },
       order: { deletedAt: 'DESC' },
+    });
+  }
+
+  async getDeletedLocationsCount(buildingId: number): Promise<number> {
+    return this.locationsRepository.count({
+      select: ['id', 'deletedAt'],
+      withDeleted: true,
+      where: {
+        deletedAt: Not(IsNull()),
+        building: { id: buildingId },
+      },
     });
   }
 }

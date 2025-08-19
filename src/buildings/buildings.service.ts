@@ -25,6 +25,7 @@ import {
   maCount,
 } from 'src/shared/sql-query/query';
 import { OutputBuilding, RawBuilding } from 'src/shared/types/building-raw.dto';
+import { LocationsService } from 'src/locations/locations.service';
 
 @Injectable()
 export class BuildingsService {
@@ -37,6 +38,8 @@ export class BuildingsService {
     private buildingRepository: Repository<Building>,
     @Inject(forwardRef(() => EntitiesService))
     private readonly entityService: EntitiesService,
+    @Inject(forwardRef(() => LocationsService))
+    private readonly locationsService: LocationsService,
   ) {}
 
   findAll(): Promise<Building[]> {
@@ -55,7 +58,7 @@ export class BuildingsService {
     buildingId: number,
   ) {
     // join location and then join location to configuration and count *
-    const [building, num] = await Promise.all([
+    const [building, num, inactive] = await Promise.all([
       this.buildingRepository
         .query(
           `SELECT b.id AS building_id, b.name AS building_name,
@@ -150,6 +153,7 @@ export class BuildingsService {
           c5Count: number;
           c6Count: number;
         }>(),
+      this.locationsService.getDeletedLocationsCount(buildingId),
     ]);
     if (!building || Object.keys(building).length === 0 || !num) {
       throw new NotFoundException(
@@ -159,7 +163,28 @@ export class BuildingsService {
     return {
       ...building,
       ...num,
+      inactive,
     };
+  }
+
+  async getInactiveLocations(
+    sectionId: number,
+    entityId: number,
+    buildingId: number,
+  ): Promise<Location[]> {
+    if (
+      !(await this.buildingRepository.exists({
+        where: {
+          id: buildingId,
+          entity: { id: entityId, section: { id: sectionId } },
+        },
+      }))
+    ) {
+      throw new NotFoundException(
+        `Building with id ${buildingId} in entity ${entityId} and section ${sectionId} not found`,
+      );
+    }
+    return await this.locationsService.getDeletedLocations(buildingId);
   }
 
   async create(
