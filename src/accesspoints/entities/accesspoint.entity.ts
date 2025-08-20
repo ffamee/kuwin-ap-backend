@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -98,6 +99,7 @@ export class Accesspoint {
   // switchIp: string | null;
 
   @Column('varchar', { name: 'model', nullable: false, length: 100 })
+  @Index()
   model: string;
 
   @Column('varchar', {
