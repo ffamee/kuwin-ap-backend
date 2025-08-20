@@ -241,6 +241,40 @@ export class EntitiesService {
     };
   }
 
+  async getConfigCount(sectionId: number, entityId: number) {
+    if (
+      !(await this.entityRepository.exists({
+        where: { id: entityId, section: { id: sectionId } },
+      }))
+    ) {
+      throw new NotFoundException(
+        `Entity with ID ${entityId} not found in section ${sectionId}`,
+      );
+    }
+    return this.entityRepository
+      .createQueryBuilder('entity')
+      .leftJoin('entity.section', 'section')
+      .leftJoin('entity.buildings', 'building')
+      .leftJoin('building.locations', 'location')
+      .leftJoin('location.configuration', 'configuration')
+      .select(configCount, 'configCount')
+      .addSelect(downCount, 'downCount')
+      .addSelect(maCount, 'maCount')
+      .addSelect(c24Count, 'c24Count')
+      .addSelect(c5Count, 'c5Count')
+      .addSelect(c6Count, 'c6Count')
+      .where('entity.id = :entityId', { entityId })
+      .andWhere('section.id = :sectionId', { sectionId })
+      .getRawOne<{
+        configCount: number;
+        downCount: number;
+        maCount: number;
+        c24Count: number;
+        c5Count: number;
+        c6Count: number;
+      }>();
+  }
+
   async create(
     createEntityDto: CreateEntityDto,
     file: Express.Multer.File | undefined,

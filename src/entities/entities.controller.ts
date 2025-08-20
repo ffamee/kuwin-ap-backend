@@ -126,6 +126,14 @@ export class EntitiesController {
     return this.entitiesService.getEntityOverview(+sectionId, +entityId);
   }
 
+  @Get('count')
+  getConfigCountInEntity(
+    @Query('sec') sectionId: string,
+    @Query('entity') entityId: string,
+  ) {
+    return this.entitiesService.getConfigCount(+sectionId, +entityId);
+  }
+
   @ApiOperation({
     summary: 'Get all entities for each section',
   })
