@@ -23,6 +23,8 @@ import { IpModule } from './ip/ip.module';
 import { LocationsModule } from './locations/locations.module';
 import { HistoriesModule } from './histories/histories.module';
 import { ConfigurationsModule } from './configurations/configurations.module';
+import { ModelsModule } from './models/models.module';
+import { LifecyclesModule } from './lifecycles/lifecycles.module';
 
 @Module({
   imports: [
@@ -95,6 +97,8 @@ import { ConfigurationsModule } from './configurations/configurations.module';
     LocationsModule,
     HistoriesModule,
     ConfigurationsModule,
+    ModelsModule,
+    LifecyclesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
