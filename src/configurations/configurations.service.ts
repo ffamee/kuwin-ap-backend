@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Configuration } from './entities/configuration.entity';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Not, Repository } from 'typeorm';
 import { IpService } from '../ip/ip.service';
 import { CreateConfigurationDto } from './dto/create-configuration.dto';
 import { LocationsService } from '../locations/locations.service';
@@ -22,6 +22,8 @@ import {
 import { Metrics } from 'src/shared/types/snmp-metrics';
 import { AccesspointsService } from 'src/accesspoints/accesspoints.service';
 import { History } from 'src/histories/entities/history.entity';
+import { UpdateConfigurationDto } from './dto/update-configuration.dto';
+import { Location } from 'src/locations/entities/location.entity';
 
 @Injectable()
 export class ConfigurationsService {
@@ -99,6 +101,161 @@ export class ConfigurationsService {
       throw new InternalServerErrorException(
         `An error occurred while creating the configuration,
         ${error}`,
+      );
+    }
+  }
+
+  /*not finished*/
+  async edit(
+    id: number,
+    files: {
+      ap: Express.Multer.File | undefined;
+      location: Express.Multer.File | undefined;
+    },
+    updateConfigurationDto: UpdateConfigurationDto,
+  ) {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const config = await manager.findOne(Configuration, {
+          where: { id },
+          select: {
+            ip: { id: true, ip: true },
+            location: { id: true, name: true, building: { id: true } },
+          },
+          relations: ['ip', 'location', 'location.building'],
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (config) {
+          if (
+            (updateConfigurationDto.ip &&
+              config.ip.ip !== updateConfigurationDto.ip) ||
+            (updateConfigurationDto.buildingId &&
+              config.location.building.id !== updateConfigurationDto.buildingId)
+          ) {
+            // delete old and save new
+            const ip = updateConfigurationDto.ip
+              ? await this.ipService.getIp(manager, updateConfigurationDto.ip)
+              : null;
+            let location: number | null = config.location.id;
+            if (updateConfigurationDto.buildingId) {
+              location = await this.locationsService.getLocation(
+                manager,
+                updateConfigurationDto.name ?? config.location.name,
+                updateConfigurationDto.buildingId,
+              );
+            } else {
+              // rename and check duplicate location name
+              if (updateConfigurationDto.name) {
+                if (
+                  await manager.exists(Location, {
+                    where: {
+                      name: updateConfigurationDto.name,
+                      id: Not(location),
+                      building: { id: config.location.building.id },
+                    },
+                  })
+                ) {
+                  throw new ConflictException(
+                    `Location with name ${updateConfigurationDto.name} already exists`,
+                  );
+                }
+
+                await manager.update(Location, location ?? config.location.id, {
+                  name: updateConfigurationDto.name,
+                });
+              }
+            }
+
+            if (!location)
+              throw new InternalServerErrorException(
+                'Location error or not be created',
+              );
+
+            // const {
+            //   id: _id,
+            //   createdAt: _createdAt,
+            //   lastSeenAt: _lastSeenAt,
+            //   ...details
+            // } = config;
+            const newConfig = manager.create(Configuration, {
+              // ...(ip ? { ip: { id: ip } } : { ...details }),
+              ip: { id: ip ?? config.ip.id },
+              location: { id: location },
+            });
+            if (config.status !== StatusState.Pending) {
+              await manager.insert(History, {
+                configId: config.id,
+                startedAt: config.createdAt,
+                accesspoint: config.accesspoint,
+                ip: config.ip,
+                location: config.location,
+              });
+            }
+            if (location !== config.location.id)
+              await this.locationsService.softDeleteLocation(
+                manager,
+                config.location.id,
+              );
+            await manager.remove(Configuration, config);
+            const raw = await manager.insert(Configuration, newConfig);
+            const configId = (raw.identifiers[0] as { id: number }).id;
+            return manager.findOne(Configuration, {
+              where: { id: configId },
+              relations: ['ip', 'location', 'accesspoint'],
+              select: {
+                ip: { id: true, ip: true },
+                location: {
+                  id: true,
+                  name: true,
+                },
+                accesspoint: { id: true, name: true },
+              },
+            });
+          } else {
+            // only change location name
+            const { name, ..._rest } = updateConfigurationDto;
+            if (name && name !== config.location.name) {
+              const checkDup = await manager.findOne(Location, {
+                where: {
+                  name,
+                  id: Not(config.location.id),
+                  building: { id: config.location.building.id },
+                },
+              });
+              if (checkDup) {
+                throw new ConflictException(
+                  `Location with name ${name} already exists`,
+                );
+              }
+              await manager.update(Location, config.location.id, {
+                name,
+              });
+            }
+            return manager.findOne(Configuration, {
+              where: { id },
+              relations: ['ip', 'location', 'accesspoint'],
+              select: {
+                ip: { id: true, ip: true },
+                location: {
+                  id: true,
+                  name: true,
+                },
+                accesspoint: { id: true, name: true },
+              },
+            });
+          }
+        } else
+          throw new NotFoundException(`Configuration with ID ${id} not found`);
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `An error occurred while editing the configuration with ID ${id}, ${error}`,
       );
     }
   }

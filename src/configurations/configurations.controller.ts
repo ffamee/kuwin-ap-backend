@@ -20,6 +20,7 @@ import {
   ApiOperation,
   ApiQuery,
 } from '@nestjs/swagger';
+import { UpdateConfigurationDto } from './dto/update-configuration.dto';
 
 @Controller('configurations')
 export class ConfigurationsController {
@@ -127,12 +128,21 @@ export class ConfigurationsController {
     ),
   )
   edit(
+    @Param('id') id: string,
     @UploadedFiles()
-    files: { ap?: Express.Multer.File[]; location?: Express.Multer.File[] },
+    files: {
+      ap?: Express.Multer.File[];
+      location?: Express.Multer.File[];
+    },
     @Body()
-    createConfigurationDto: { name: string; buildingId: number; ip: string },
+    updateConfigurationDto: UpdateConfigurationDto,
   ) {
-    console.dir({ files, createConfigurationDto }, { depth: null });
+    // console.dir({ files, updateConfigurationDto }, { depth: null });
+    return this.configurationsService.edit(
+      +id,
+      { ap: files.ap?.[0], location: files.location?.[0] },
+      updateConfigurationDto,
+    );
   }
 
   @Delete(':id')
