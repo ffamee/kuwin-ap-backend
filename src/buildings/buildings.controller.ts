@@ -98,6 +98,41 @@ export class BuildingsController {
     );
   }
 
+  @ApiOperation({ summary: 'Get all inactive locations in a building' })
+  @ApiQuery({
+    name: 'sec',
+    required: true,
+    description: 'Section ID',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'entity',
+    required: true,
+    description: 'Entity ID',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'build',
+    required: true,
+    description: 'Building ID',
+    type: Number,
+  })
+  @ApiNotFoundResponse({
+    description: 'Building with the given ID not found',
+  })
+  @ApiOkResponse({
+    description: 'Returns all inactive locations in the building',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', description: 'Location ID' },
+          name: { type: 'string', description: 'Location name' },
+        },
+      },
+    },
+  })
   @Get('inactive')
   getInactiveLocations(
     @Query('sec') sectionId: string,
@@ -105,6 +140,54 @@ export class BuildingsController {
     @Query('build') buildingId: string,
   ) {
     return this.buildingsService.getInactiveLocations(
+      +sectionId,
+      +entityId,
+      +buildingId,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get configuration count in a building' })
+  @ApiQuery({
+    name: 'sec',
+    required: true,
+    description: 'Section ID',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'entity',
+    required: true,
+    description: 'Entity ID',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'build',
+    required: true,
+    description: 'Building ID',
+    type: Number,
+  })
+  @ApiNotFoundResponse({
+    description: 'Building with the given ID not found',
+  })
+  @ApiOkResponse({
+    description: 'Returns the count of configurations in the building',
+    schema: {
+      type: 'Object',
+      description: 'Count of configurations in the building',
+      properties: {
+        count: {
+          type: 'number',
+          description: 'Number of configurations in the building',
+        },
+      },
+    },
+  })
+  @Get('count')
+  getConfigCountInBuilding(
+    @Query('sec') sectionId: string,
+    @Query('entity') entityId: string,
+    @Query('build') buildingId: string,
+  ) {
+    return this.buildingsService.getConfigCount(
       +sectionId,
       +entityId,
       +buildingId,

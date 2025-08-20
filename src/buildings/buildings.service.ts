@@ -187,6 +187,51 @@ export class BuildingsService {
     return await this.locationsService.getDeletedLocations(buildingId);
   }
 
+  async getConfigCount(
+    sectionId: number,
+    entityId: number,
+    buildingId: number,
+  ) {
+    if (
+      !(await this.buildingRepository.exists({
+        where: {
+          id: buildingId,
+          entity: { id: entityId, section: { id: sectionId } },
+        },
+      }))
+    ) {
+      throw new NotFoundException(
+        `Building with id ${buildingId} in entity ${entityId} and section ${sectionId} not found`,
+      );
+    }
+    return (
+      this.buildingRepository
+        .createQueryBuilder('building')
+        .leftJoin('building.entity', 'entity')
+        .leftJoin('entity.section', 'section')
+        .leftJoin('building.locations', 'location')
+        .leftJoin('location.configuration', 'configuration')
+        .select(configCount, 'configCount')
+        .addSelect(downCount, 'downCount')
+        .addSelect(maCount, 'maCount')
+        .addSelect(c24Count, 'c24Count')
+        .addSelect(c5Count, 'c5Count')
+        .addSelect(c6Count, 'c6Count')
+        .where('building.id = :buildingId', { buildingId })
+        .andWhere('entity.id = :entityId', { entityId })
+        .andWhere('section.id = :sectionId', { sectionId })
+        // .andWhere('configuration.id IS NOT NULL')
+        .getRawOne<{
+          configCount: number;
+          downCount: number;
+          maCount: number;
+          c24Count: number;
+          c5Count: number;
+          c6Count: number;
+        }>()
+    );
+  }
+
   async create(
     createBuildingDto: CreateBuildingDto,
     file: Express.Multer.File | undefined,
