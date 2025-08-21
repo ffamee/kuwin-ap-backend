@@ -122,7 +122,7 @@ export class SectionService {
         },
       },
       relations: { entities: true },
-      where: { id: Not(4) },
+      // where: { id: Not(4) },
     });
 
     const sections: Record<string, Section> = (await res).reduce(

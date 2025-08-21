@@ -277,11 +277,20 @@ export class BuildingsService {
         if (building) {
           if (building.locations.length > 0) {
             if (confirm) {
-              await manager.update(
-                Location,
-                { building: { id } },
-                { building: { id: 290 } }, // Move locations to default building with ID 290
-              );
+              // await manager.update(
+              //   Location,
+              //   { building: { id } },
+              //   { building: { id: 290 } }, // Move locations to default building with ID 290
+              // );
+              await manager
+                .createQueryBuilder(Location, 'location')
+                .update(Location)
+                .set({
+                  building: { id: 290 },
+                  name: () => `CONCAT(name, '(from building ${id})')`,
+                })
+                .where({ building: { id } })
+                .execute();
             } else {
               throw new ConflictException(
                 `Cannot delete building with ID ${id} because it has associated locations.`,
