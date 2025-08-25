@@ -271,6 +271,7 @@ export class BuildingsService {
       return this.dataSource.transaction(async (manager) => {
         const building = await manager.findOne(Building, {
           where: { id },
+          withDeleted: true,
           relations: ['locations'],
           lock: { mode: 'pessimistic_write' },
         });
@@ -338,6 +339,7 @@ export class BuildingsService {
       return await this.dataSource.transaction(async (manager) => {
         const building = await manager.findOne(Building, {
           where: { id },
+          withDeleted: true,
           relations: ['entity', 'locations'],
           lock: { mode: 'pessimistic_write' },
         });
