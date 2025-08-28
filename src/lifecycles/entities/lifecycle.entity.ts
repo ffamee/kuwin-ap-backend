@@ -25,6 +25,14 @@ export class Lifecycle {
   })
   eos: Date | null;
 
+  @Column('varchar', {
+    name: 'pic',
+    nullable: true,
+    length: 100,
+    default: 'default.png',
+  })
+  pic: string | null;
+
   @OneToMany(() => Model, (model) => model.lifecycle)
   models: Model[];
 }

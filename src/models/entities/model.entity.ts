@@ -9,14 +9,6 @@ export class Model {
   @Column('varchar', { name: 'model', nullable: false, length: 50 })
   model: string;
 
-  @Column('varchar', {
-    name: 'pic',
-    nullable: true,
-    length: 100,
-    default: 'underconstruction.gif',
-  })
-  pic: string | null;
-
   @ManyToOne(() => Lifecycle, (lifecycle) => lifecycle.models, {
     onDelete: 'RESTRICT',
     onUpdate: 'CASCADE',
