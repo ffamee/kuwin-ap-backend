@@ -1,0 +1,83 @@
+services:
+  backend:
+    container_name: kuwin-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./src:/app/src
+    env_file:
+      - .env
+      - .env.development.local
+    depends_on:
+      - database
+      - influxdb
+      - redis
+    restart: always
+
+  database:
+    image: mysql:8.0.42
+    container_name: kuwin-database
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mysql_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      # - db_data:/var/lib/mysql
+      - ./src/sql/backup.sql:/docker-entrypoint-initdb.d/backup.sql
+    restart: always
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2.0
+    container_name: kuwin-phpmyadmin
+    depends_on:
+      - database
+    environment:
+      PMA_HOST: database
+      PMA_PORT: 3306
+      # (option) กำหนด user และ password ค่า default จะดึงจาก database env
+      # PMA_USER: user
+      # PMA_PASSWORD: password
+    ports:
+      - "8080:80"
+    restart: always
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: kuwin-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: password
+      DOCKER_INFLUXDB_INIT_ORG: my_org
+      DOCKER_INFLUXDB_INIT_BUCKET: my_bucket
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: admin_token
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: admin_token
+      INFLUX_ORG: my_org
+      INFLUX_BUCKET: my_bucket
+    # volumes:
+    #   - influxdb:/var/lib/influxdb2
+    restart: always
+
+  redis:
+    image: redis:8.0
+    container_name: kuwin-redis
+    ports:
+      - "6379:6379"
+    # volumes:
+    #   - redis_data:/data
+    restart: always
+
+# volumes:
+#   db_data:
+#   influxdb:
+#   redis_data:

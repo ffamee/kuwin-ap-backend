@@ -4,14 +4,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     ports:
       - "3001:3001"
     volumes:
       - ./src:/app/src
+    env_file:
+      - .env
+      - .env.production.local
     depends_on:
       - database
       - influxdb
       - redis
+    restart: always
 
   database:
     image: mysql:8.0.42
@@ -24,6 +29,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
+      # - db_data:/var/lib/mysql
       - ./src/sql/backup.sql:/docker-entrypoint-initdb.d/backup.sql
     restart: always
 
@@ -58,13 +64,20 @@ services:
       INFLUX_TOKEN: admin_token
       INFLUX_ORG: my_org
       INFLUX_BUCKET: my_bucket
-    restart: always
     # volumes:
-    #   - ./influxdb:/var/lib/influxdb2
+    #   - influxdb:/var/lib/influxdb2
+    restart: always
 
   redis:
     image: redis:8.0
     container_name: kuwin-redis
     ports:
       - "6379:6379"
+    # volumes:
+    #   - redis_data:/data
     restart: always
+
+# volumes:
+#   db_data:
+#   influxdb:
+#   redis_data:

@@ -30,7 +30,7 @@ import { LifecyclesModule } from './lifecycles/lifecycles.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: [`.env.${process.env.NODE_ENV}.local`, '.env'],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
